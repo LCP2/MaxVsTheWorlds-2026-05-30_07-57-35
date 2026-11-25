@@ -146,6 +146,8 @@ namespace MaxWorlds.UI
         // SOUND tab (MV-1009): the Music switch and one switch per SfxCueLibrary.Cue, kept apart from
         // _knobs since they render as pills (BuildToggleRow), not sliders.
         private ToggleRow _musicToggleRow;
+        private ToggleRow _ambienceToggleRow;   // MV-1467
+        private ToggleRow _allSoundToggleRow;   // MV-1467
         private readonly List<ToggleRow> _cueToggleRows = new List<ToggleRow>();
 
         /// <summary>One tunable value: where its number comes from, where it goes, and what 100%
@@ -830,6 +832,19 @@ namespace MaxWorlds.UI
                 Set = MusicDirector.SetMusicOn,
             };
 
+            _ambienceToggleRow = new ToggleRow
+            {
+                Name = "Ambience",
+                Get = () => AmbienceDirector.IsAmbienceOn,
+                Set = AmbienceDirector.SetAmbienceOn,
+            };
+            _allSoundToggleRow = new ToggleRow
+            {
+                Name = "All sound",
+                Get = () => AudioMaster.IsAllSoundOn,
+                Set = AudioMaster.SetAllSoundOn,
+            };
+
             _cueToggleRows.Clear();
             foreach (var cue in SfxCueLibrary.AllCues)
             {
@@ -1039,7 +1054,9 @@ namespace MaxWorlds.UI
                         idx++;
                     }
 
+                    PlaceNext((p, x, ry, w) => BuildToggleRow(_allSoundToggleRow, p, x, ry, w));
                     PlaceNext((p, x, ry, w) => BuildToggleRow(_musicToggleRow, p, x, ry, w));
+                    PlaceNext((p, x, ry, w) => BuildToggleRow(_ambienceToggleRow, p, x, ry, w));
                     PlaceNext((p, x, ry, w) => BuildActionRow("ALL ON", () => SetAllCueToggles(true), p, x, ry, w));
                     PlaceNext((p, x, ry, w) => BuildActionRow("ALL OFF", () => SetAllCueToggles(false), p, x, ry, w));
                     foreach (var toggle in _cueToggleRows)

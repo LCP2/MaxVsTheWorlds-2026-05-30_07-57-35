@@ -411,6 +411,12 @@ namespace MaxWorlds.Core
         /// the Settings panel's SOUND-tab Music toggle, beside <see cref="MusicVolume"/>.</summary>
         public static float? MusicOn { get; set; }
 
+        /// <summary>Ambience bed on/off (MV-1467), 0/1, default 1.</summary>
+        public static float? AmbienceOn { get; set; }
+
+        /// <summary>Master "All sound" switch (MV-1467), 0/1, default 1. OFF = AudioListener.volume 0.</summary>
+        public static float? AllSoundOn { get; set; }
+
         // --- ORBITAL (MV-1344) — the light-missile spiral shooter's test knobs. Each one is read live
         // through MaxWorlds.Enemies.OrbitalTuning, so a moved slider affects live missiles and robots at
         // once. Authored defaults live on OrbitalTuning, not here. ---
@@ -494,7 +500,7 @@ namespace MaxWorlds.Core
             ContactDamageCooldown.HasValue || LungeTokenCap.HasValue ||
             MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue ||
             SfxVolume.HasValue || MusicVolume.HasValue || AmbienceVolume.HasValue ||
-            MutedSfxCuesMask.HasValue || MutedSfxCuesMaskHigh.HasValue || MusicOn.HasValue ||
+            MutedSfxCuesMask.HasValue || MutedSfxCuesMaskHigh.HasValue || MusicOn.HasValue || AmbienceOn.HasValue || AllSoundOn.HasValue ||
             OrbitalMissileSpeed.HasValue ||
             OrbitalTurnAtLaunch.HasValue ||
             OrbitalTurnGrowth.HasValue ||
@@ -602,6 +608,8 @@ namespace MaxWorlds.Core
             MutedSfxCuesMask = null;
             MutedSfxCuesMaskHigh = null;
             MusicOn = null;
+            AmbienceOn = null;
+            AllSoundOn = null;
             OrbitalMissileSpeed = null;
             OrbitalTurnAtLaunch = null;
             OrbitalTurnGrowth = null;
@@ -717,6 +725,8 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(MutedSfxCuesMask), () => MutedSfxCuesMask, v => MutedSfxCuesMask = v),
             (PrefsPrefix + nameof(MutedSfxCuesMaskHigh), () => MutedSfxCuesMaskHigh, v => MutedSfxCuesMaskHigh = v),
             (PrefsPrefix + nameof(MusicOn), () => MusicOn, v => MusicOn = v),
+            (PrefsPrefix + nameof(AmbienceOn), () => AmbienceOn, v => AmbienceOn = v),
+            (PrefsPrefix + nameof(AllSoundOn), () => AllSoundOn, v => AllSoundOn = v),
             (PrefsPrefix + nameof(OrbitalMissileSpeed), () => OrbitalMissileSpeed, v => OrbitalMissileSpeed = v),
             (PrefsPrefix + nameof(OrbitalTurnAtLaunch), () => OrbitalTurnAtLaunch, v => OrbitalTurnAtLaunch = v),
             (PrefsPrefix + nameof(OrbitalTurnGrowth), () => OrbitalTurnGrowth, v => OrbitalTurnGrowth = v),

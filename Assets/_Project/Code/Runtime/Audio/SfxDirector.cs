@@ -128,7 +128,7 @@ namespace MaxWorlds.Audio
         {
             RigAudioMix.Advance(rigOpen, dt);
             if (_rigHum == null) return;
-            float v = IsCueMuted(Cue.RigHum) ? 0f : RigAudioMix.HumGain * RigAudioMix.HumTargetVolume;
+            float v = IsCueMuted(Cue.RigHum) || !AudioMaster.IsAllSoundOn ? 0f : RigAudioMix.HumGain * RigAudioMix.HumTargetVolume;
             _rigHum.volume = v;
             if (v <= 0f)
             {
@@ -201,6 +201,7 @@ namespace MaxWorlds.Audio
         {
             if (_loops != null) foreach (var loop in _loops) if (loop.Source != null) UpdateLoop(loop);
             ScanForNewButtons();
+            AudioMaster.Apply(Application.isBatchMode);   // MV-1467: keeps the master mute across scene reloads
             TickRigAudio(RigAudioMix.RigOpen, Time.unscaledDeltaTime);   // MV-1444
 
             // MV-1437: advance ducking on real (unscaled) time and push it to the mixer.

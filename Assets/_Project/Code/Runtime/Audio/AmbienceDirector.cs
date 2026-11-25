@@ -49,8 +49,27 @@ namespace MaxWorlds.Audio
         {
             if (_source == null) return;   // MV-1441: bed source destroyed under us
             TickWorld();
+            Tick();
+        }
+
+        /// <summary>MV-1467: Ambience OFF (or All sound OFF) = volume 0 and the source stopped that same
+        /// frame; ON again restarts the current world's bed. Otherwise slider x RIG fade (MV-1444).</summary>
+        private void Tick()
+        {
+            if (!IsAmbienceOn || !AudioMaster.IsAllSoundOn)
+            {
+                _source.volume = 0f;
+                if (_source.isPlaying) _source.Stop();
+                return;
+            }
+            if (_source.clip != null && !_source.isPlaying) _source.Play();
             _source.volume = Mathf.Clamp01(DevTuning.Or(DevTuning.AmbienceVolume, DefaultAmbienceVolume)) * RigAudioMix.GameGain;   // MV-1444
         }
+
+        /// <summary>The SOUND-tab Ambience switch (MV-1467). Default ON.</summary>
+        public static bool IsAmbienceOn => DevTuning.Or(DevTuning.AmbienceOn, 1f) >= 0.5f;
+
+        public static void SetAmbienceOn(bool on) => DevTuning.AmbienceOn = on ? 1f : 0f;
 
         private void TickWorld()
         {
@@ -61,7 +80,7 @@ namespace MaxWorlds.Audio
                 var clip = Resources.Load<AudioClip>(ResourcePath(WorldCatalog.Get(_worldIndex).Id));
                 _source.Stop();
                 _source.clip = clip;
-                if (clip != null) _source.Play();
+                if (clip != null && IsAmbienceOn && AudioMaster.IsAllSoundOn) _source.Play();
             }
         }
     }
