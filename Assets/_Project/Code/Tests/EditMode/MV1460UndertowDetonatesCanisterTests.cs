@@ -24,7 +24,14 @@ namespace MaxWorlds.Tests.EditMode
         public void SetUp() { WeaponSystemState.Reset(); EnemyNavigation.Reset(); RobotEnemy.ResetRegistry(); DevMode.Reset(); DevTuning.Reset(); }
 
         [TearDown]
-        public void TearDown() { WeaponSystemState.Reset(); EnemyNavigation.Reset(); RobotEnemy.ResetRegistry(); DevMode.Reset(); DevTuning.Reset(); }
+        public void TearDown()
+        {
+            WeaponSystemState.Reset(); EnemyNavigation.Reset(); RobotEnemy.ResetRegistry(); DevMode.Reset(); DevTuning.Reset();
+            // MapRuntime.Build fills these process-wide registries; never leave a built world's actors behind
+            // for the next fixture (shard neighbours such as MV1442RobotSpacingTests measure real spacing).
+            Canister.ResetRegistry(); Pylon.ResetRegistry(); DestructibleCover.ResetRegistry();
+            AirlockPanel.ResetRegistry(); ChallengePad.ResetRegistry(); RepairBay.ResetRegistry(); Vault.ResetRegistry();
+        }
 
         [TestCase("world3")]
         [TestCase("mothership")]

@@ -53,6 +53,7 @@ PASS glow-containment: 1/1 owned nodes under 25% annulus ink
 PASS colour-probes: 1/1 sampled points match rig_board.json
 PASS glyph-height: 0/0 category labels clear 18px-at-ref floor
 PASS y-bounds-containment: 5/5 nodes within [0,1210] board content
+rig-mv1453-city-2556x1179.png (2556x1179)
 weapons-button-idle.png (1920x1080)
 weapons-button-parts.png (1920x1080)
 weapons-button-module.png (1920x1080)
