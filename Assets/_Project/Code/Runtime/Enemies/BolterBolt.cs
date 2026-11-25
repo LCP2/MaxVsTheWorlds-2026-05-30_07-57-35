@@ -91,9 +91,8 @@ namespace MaxWorlds.Enemies
             if (aim.sqrMagnitude < 1e-4f) aim = Vector3.forward;
             go.transform.rotation = Quaternion.LookRotation(aim.normalized, Vector3.up);
 
-            BuildVisual(go.transform);
-
             var bolt = go.AddComponent<BolterBolt>();
+            bolt.BuildVisual(go.transform);
             bolt.Init(target, speed, maxRange, hitRadius);
             return bolt;
         }
@@ -153,32 +152,80 @@ namespace MaxWorlds.Enemies
                 _trail != null ? _trail.time * _speed : 0f);
         }
 
-        /// <summary>Read live off <see cref="CharacterSkin.BaseColorFor"/> rather than a copied literal
-        /// (same reasoning as <see cref="HomingMissile.ShaftColor"/>) — a retune of the Bolter's own
-        /// body colour can never drift out of step with its bolt.</summary>
-        private static Color RodColor => CharacterSkin.BaseColorFor(CharacterSkin.RoleFor(EnemyKind.Bolter));
+        /// <summary>MV-1461: the hot orange-red of the bolt's core and glow (#FF6A2B).</summary>
+        public static readonly Color HotOrange = new Color(1f, 0x6A / 255f, 0x2B / 255f);
+        /// <summary>MV-1461: the near-white centre of the core (#FFE0C0).</summary>
+        public static readonly Color HotWhite = new Color(1f, 0xE0 / 255f, 0xC0 / 255f);
+        /// <summary>MV-1461: core thickness (m), glow width (m) and trail lifetime (s).</summary>
+        public const float CoreThickness = 0.14f, GlowWidth = 0.4f, TrailSeconds = 0.3f;
 
-        /// <summary>A single thin rod — approx 0.6 m long x 0.08 m radius per the ticket's spec — laid
-        /// onto the object's own forward axis the same way <see cref="HomingMissile.BuildVisual"/>'s
-        /// shaft is: a Capsule rotated 90° about X so its long axis (local Y) becomes local Z.</summary>
-        private static void BuildVisual(Transform parent)
+        /// <summary>MV-1461: an unlit, additive rod that reads as incoming danger on a dark deck — an
+        /// orange-red core with a near-white centre, a soft additive glow halo and a fading trail. Replaces
+        /// the lit grey-metal rod (MV-539) that vanished against the Reef deck. Materials are additive
+        /// particle-shader materials, so scene lighting never darkens them.</summary>
+        private void BuildVisual(Transform parent)
         {
-            // Same reason as HomingMissile.BuildVisual: without this, RuntimeSurfaceDirector's sweep
-            // claims this a frame after spawn and overwrites the deliberate paint with the generic
-            // world-prop material (MV-350).
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
-            Material rodMat = MaterialLibrary.Tinted(SurfaceKind.Metal, RodColor);
+            _coreRenderer = AddRod(parent, "Core", CoreThickness, 0.6f, HotOrange);
+            AddRod(parent, "CoreCentre", CoreThickness * 0.5f, 0.5f, HotWhite);
+            AddRod(parent, "Glow", GlowWidth, 0.9f, new Color(HotOrange.r, HotOrange.g, HotOrange.b, 0.3f));
 
+            _trail = parent.gameObject.AddComponent<TrailRenderer>();
+            _trail.time = TrailSeconds;
+            _trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+            _trail.widthMultiplier = CoreThickness * 1.6f;
+            _trail.minVertexDistance = 0.05f;
+            _trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _trail.receiveShadows = false;
+            _trail.colorGradient = FadeToClear(HotOrange);
+            _trail.sharedMaterial = VfxMaterials.AdditiveTinted(HotOrange);
+        }
+
+        private static Gradient FadeToClear(Color c)
+        {
+            var g = new Gradient();
+            g.SetKeys(new[] { new GradientColorKey(c, 0f), new GradientColorKey(c, 1f) },
+                      new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+            return g;
+        }
+
+        private static Renderer AddRod(Transform parent, string name, float thickness, float length, Color colour)
+        {
             var rod = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            rod.name = "Rod";
+            rod.name = name;
             Strip(rod);
             rod.transform.SetParent(parent, false);
             rod.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            // Unity's capsule primitive is 2 units pole-to-pole and 1 unit across at scale 1 — a local
-            // Y scale of 0.3 gives a ~0.6 m rod, a local X/Z scale of 0.16 gives a ~0.08 m radius.
-            rod.transform.localScale = new Vector3(0.16f, 0.3f, 0.16f);
-            if (rodMat != null) rod.GetComponent<MeshRenderer>().sharedMaterial = rodMat;
+            // A capsule is 2 units pole-to-pole and 1 across at scale 1.
+            rod.transform.localScale = new Vector3(thickness, length * 0.5f, thickness);
+            var r = rod.GetComponent<MeshRenderer>();
+            var mat = VfxMaterials.AdditiveTinted(colour);
+            if (mat != null) r.sharedMaterial = mat;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            return r;
+        }
+
+        /// <summary>MV-1461: a small spark burst where the bolt ends (wall or Max). Play mode only.</summary>
+        private static void SpawnImpactSparks(Vector3 at)
+        {
+            var go = new GameObject("BolterBoltSparks");
+            go.transform.position = at;
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.duration = 0.4f; main.loop = false;
+            main.startLifetime = 0.3f; main.startSpeed = 4f; main.startSize = 0.12f;
+            main.startColor = HotOrange;
+            main.stopAction = ParticleSystemStopAction.Destroy;
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 10) });
+            var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Sphere; shape.radius = 0.05f;
+            var rend = go.GetComponent<ParticleSystemRenderer>();
+            var mat = VfxMaterials.Additive(VfxMaterials.Glow());
+            if (mat != null) rend.sharedMaterial = mat;
+            ps.Play();
         }
 
         private static void Strip(GameObject go)
@@ -335,7 +382,7 @@ namespace MaxWorlds.Enemies
         private void DestroySelf()
         {
             ImpactPoint = transform.position;
-            if (Application.isPlaying) Destroy(gameObject);
+            if (Application.isPlaying) { SpawnImpactSparks(ImpactPoint); Destroy(gameObject); }
             else DestroyImmediate(gameObject);
         }
     }
