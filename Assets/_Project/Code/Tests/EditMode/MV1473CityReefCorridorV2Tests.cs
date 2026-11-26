@@ -121,7 +121,13 @@ namespace MaxWorlds.Tests.EditMode
             // --- light posts no more than 4 m apart along the whole length ---
             var lamps = new List<float>();
             foreach (var t in root.GetComponentsInChildren<Transform>())
-                if (t.name.StartsWith("Corridor Lamp")) lamps.Add(Vector3.Dot(t.position - origin, dir));
+                if (t.name.StartsWith("Corridor Lamp"))
+                {
+                    // the lamp root sits at the origin; the post's own built bounds say where the lamp stands
+                    Transform post = t.Find("Post");
+                    Assert.IsNotNull(post, $"{t.name} has no post");
+                    lamps.Add(Vector3.Dot(post.GetComponent<Renderer>().bounds.center - origin, dir));
+                }
             lamps.Sort();
             Assert.IsNotEmpty(lamps, "light posts must be built");
             Assert.LessOrEqual(lamps[0], 4f, "first light post too far from the City door");

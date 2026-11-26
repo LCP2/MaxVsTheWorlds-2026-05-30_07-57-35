@@ -449,87 +449,124 @@ namespace MaxWorlds.Arena
 
         private static float NorthSign(Wall wall) => AcrossDir(wall).z >= 0f ? 1f : -1f;
 
-        // MV-1470: the City -> Reef exit corridor. Three equal sections (the shell builds its three
-        // segments at thirds for this row), one continuous themed run: station street -> tiled
-        // underpass -> harbour gantry ending at the Reef's round hull hatch.
-        private static readonly Color UnderpassCream = new Color(0.80f, 0.76f, 0.66f);
-        private static readonly Color StripLightWhite = new Color(1f, 0.99f, 0.93f);
-        private static readonly Color GantryRope = new Color(0.62f, 0.50f, 0.32f);
+        // MV-1473: the City -> Reef exit corridor v2. The street slopes down to the waterfront as ONE
+        // run: every element blends into the next by fraction of the corridor length (the floor and
+        // walls themselves are built by WorldJoinSequence.BuildContinuousCityReefShell; this adds the
+        // dressing on top). The three segment hosts are only parents (thirds); nothing here is sectional.
         private static readonly Color GantryBollard = new Color(0.16f, 0.20f, 0.22f);
         private static readonly Color GratingBar = new Color(0.07f, 0.10f, 0.12f);
+        private static readonly Color PlankGap = new Color(0.12f, 0.08f, 0.05f);
+        private static readonly Color PavingJoint = new Color(0.24f, 0.22f, 0.20f);
+        private static readonly Color RailSteel = new Color(0.55f, 0.58f, 0.58f);
         private static readonly Color HatchTeal = new Color(0.30f, 0.85f, 0.88f);
         private static readonly Color HatchFrame = new Color(0.10f, 0.22f, 0.26f);
 
-        /// <summary>The City -> Reef corridor's three sections (MV-1470). Segment A = station street,
-        /// B = underpass, C = harbour gantry; each is one third of the corridor length.</summary>
+        /// <summary>Spacing of the corridor's light posts (m); they alternate sides, so there is always a post within this of any point.</summary>
+        public const float ReefCorridorLampPitch = 3.75f;
+        /// <summary>Fraction of the corridor length where the south sea railing begins.</summary>
+        public const float ReefRailStart = 0.40f;
+
         public static void DressExitReef(Transform segA, Transform segB, Transform segC,
             Vector2 doorMouth, Wall wall, float wallHeight, WorldTransitionEntry entry)
         {
-            float third = entry.CorridorLength / 3f;
-            if (segA != null) DressStationStreet(segA, doorMouth, wall, wallHeight, 0f, third);
-            if (segB != null) DressUnderpass(segB, doorMouth, wall, wallHeight, third, 2f * third);
-            if (segC != null) DressHarbourGantry(segC, doorMouth, wall, wallHeight, 2f * third, entry.CorridorLength);
-        }
-
-        private static void DressStationStreet(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float d0, float d1)
-        {
-            DressCityStreetStrip(host, doorMouth, wall, d0, d1);
-            CityKit.BuildDashedLine(host, Pt(doorMouth, wall, d0 + 0.5f, 0f), Pt(doorMouth, wall, d1 - 0.5f, 0f), 1.2f, 1.0f, 0.14f);
+            float length = entry.CorridorLength;
+            float third = length / 3f;
+            Transform[] hosts = { segA, segB, segC };
+            Transform HostAt(float d) => hosts[Mathf.Clamp(Mathf.FloorToInt(d / third), 0, 2)] ?? segA ?? segB ?? segC;
+            if (segA == null && segB == null && segC == null) return;
 
             float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
-            Vector3 across = AcrossDir(wall);
-            CityKit.BuildStreetLamp(host, At(doorMouth, wall, d0 + (d1 - d0) * 0.25f, -(halfWidth - 0.2f), 0f), across,
-                StreetLampHeight, StreetLampArmLength);
-            CityKit.BuildStreetLamp(host, At(doorMouth, wall, d0 + (d1 - d0) * 0.75f, halfWidth - 0.2f, 0f), -across,
-                StreetLampHeight, StreetLampArmLength);
-        }
-
-        private static void DressUnderpass(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float d0, float d1)
-        {
-            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
-            float y = wallHeight * 0.82f;
-            for (float d = d0 + 1.0f; d + 1.6f <= d1 + 0.01f; d += 2.5f)
-                foreach (float side in new[] { 1f, -1f })
-                    Bar(host, $"Underpass Strip Light d{d:0.0}", doorMouth, wall, d, d + 1.6f, side * (halfWidth - 0.06f), 0.1f, 0.08f, y,
-                        StripLightWhite);
-
-            // Tiled-floor joints every 2 m, the whole underpass.
-            for (float d = d0 + 1f; d < d1; d += 2f)
-                Bar(host, $"Underpass Tile Joint d{d:0.0}", doorMouth, wall, d - 0.02f, d + 0.02f, 0f, WorldTransitionEntry.CorridorWidth - 0.2f,
-                    0.012f, 0.006f, new Color(0.30f, 0.31f, 0.33f), SurfaceKind.Stone);
-        }
-
-        private static void DressHarbourGantry(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float d0, float d1)
-        {
-            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float width = WorldTransitionEntry.CorridorWidth;
             Vector3 dir = OutwardDir(wall);
             Quaternion lie = Quaternion.LookRotation(dir, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
 
-            // Wet-steel grating: dark cross bars every metre across the floor.
-            for (float d = d0 + 0.5f; d < d1; d += 1f)
-                Bar(host, $"Gantry Grating d{d:0.0}", doorMouth, wall, d - 0.04f, d + 0.04f, 0f, WorldTransitionEntry.CorridorWidth - 0.2f,
-                    0.014f, 0.007f, GratingBar, SurfaceKind.Metal);
-
-            // Bollards every 4 m and a rope rail along both walls.
-            foreach (float side in new[] { 1f, -1f })
+            // --- street: pavements and a kerb to 30%, then kerbs and lane paint fade out by 42% ---
+            float streetEnd = 0.30f * length;
+            DressCityStreetStrip(HostAt(1f), doorMouth, wall, 0f, streetEnd);
+            CityKit.BuildDashedLine(HostAt(1f), Pt(doorMouth, wall, 0.5f, 0f), Pt(doorMouth, wall, streetEnd, 0f), 1.2f, 1.0f, 0.14f);
+            float[] fade = { 1.2f, 0.9f, 0.5f };
+            float fd = streetEnd + 0.6f;
+            foreach (float len in fade)
             {
-                float across = side * (halfWidth - 0.3f);
-                for (float d = d0 + 1.5f; d <= d1 - 1.5f + 0.01f; d += 4f)
-                    StormdrainKit.AddMeshPart(host, $"Gantry Bollard d{d:0.0}", CharacterMeshes.Beam(0.7f, 0.13f, 0.1f),
-                        At(doorMouth, wall, d, across, 0.35f), SurfaceKind.Metal, GantryBollard);
-
-                float ropeStart = d0 + 1.5f, ropeEnd = d1 - 1.5f;
-                Vector3 mid = At(doorMouth, wall, (ropeStart + ropeEnd) * 0.5f, across, 0.62f);
-                StormdrainKit.Tube(host, "Gantry Rope Rail", mid, 0.03f, ropeEnd - ropeStart, lie, GantryRope);
+                if (fd + len > 0.42f * length) break;
+                Transform h = HostAt(fd);
+                foreach (float side in new[] { 1f, -1f })
+                    CityKit.BuildKerbLine(h, Pt(doorMouth, wall, fd, side * 0.9f), Pt(doorMouth, wall, fd + len, side * 0.9f));
+                CityKit.BuildDashedLine(h, Pt(doorMouth, wall, fd, 0f), Pt(doorMouth, wall, fd + len, 0f), len, 0.1f, 0.14f);
+                fd += len + 0.6f;
             }
 
-            // The Reef's round hull hatch, framing the far end: a ring and a teal glow disc.
-            Vector3 hatchAt = At(doorMouth, wall, d1 - 0.06f, 0f, Mathf.Min(wallHeight * 0.5f, 1.4f));
+            // --- floor joints that follow the material: paving slabs, plank gaps, grating bars ---
+            for (float d = 0.28f * length; d < 0.46f * length; d += 1f)
+                Bar(HostAt(d), $"Paving Joint d{d:0.0}", doorMouth, wall, d - 0.02f, d + 0.02f, 0f, width - 0.1f, 0.012f, 0.006f, PavingJoint, SurfaceKind.Stone);
+            for (float d = 0.62f * length; d < 0.76f * length; d += 0.5f)
+                Bar(HostAt(d), $"Plank Gap d{d:0.0}", doorMouth, wall, d - 0.015f, d + 0.015f, 0f, width - 0.1f, 0.012f, 0.006f, PlankGap, SurfaceKind.Wood);
+            for (float d = 0.80f * length; d < length; d += 0.5f)
+                Bar(HostAt(d), $"Grating Bar d{d:0.0}", doorMouth, wall, d - 0.04f, d + 0.04f, 0f, width - 0.1f, 0.014f, 0.007f, GratingBar, SurfaceKind.Metal);
+
+            // --- north steel bulkhead ribs (55-85%) ---
+            for (float d = 0.57f * length; d < 0.85f * length; d += 2f)
+                Bar(HostAt(d), $"Bulkhead Rib d{d:0.0}", doorMouth, wall, d - 0.06f, d + 0.06f, halfWidth - 0.05f, 0.1f, wallHeight * 0.9f, wallHeight * 0.45f,
+                    new Color(0.13f, 0.20f, 0.23f), SurfaceKind.Metal);
+
+            // --- south sea railing (top rail, posts, bollards from 52%) with a collider: Max cannot leave ---
+            float railAcross = -(halfWidth - 0.12f);
+            float r0 = ReefRailStart * length;
+            for (float d = r0; d < length - 0.01f; d += 1.5f)
+            {
+                float seg = Mathf.Min(1.5f, length - d);
+                Transform h = HostAt(d);
+                var rail = StormdrainKit.Tube(h, $"Sea Railing Rail d{d:0.0}", At(doorMouth, wall, d + seg * 0.5f, railAcross, 1.0f), 0.035f, seg, lie, RailSteel);
+                rail.AddComponent<BoxCollider>();
+                var post = StormdrainKit.AddMeshPart(h, $"Sea Railing Post d{d:0.0}", CharacterMeshes.Beam(1.0f, 0.05f, 0.04f),
+                    At(doorMouth, wall, d, railAcross, 0.5f), SurfaceKind.Metal, RailSteel);
+                post.AddComponent<BoxCollider>();
+            }
+            for (float d = 0.52f * length; d <= length - 0.5f; d += 3f)
+                StormdrainKit.AddMeshPart(HostAt(d), $"Sea Bollard d{d:0.0}", CharacterMeshes.Beam(0.7f, 0.13f, 0.1f),
+                    At(doorMouth, wall, d, -(halfWidth - 0.35f), 0.35f), SurfaceKind.Metal, GantryBollard);
+
+            // --- light posts, alternating sides, overlapping pools, colour drifting with the key light ---
+            int lampIndex = 0;
+            for (float d = 1.5f; d < length - 0.5f; d += ReefCorridorLampPitch, lampIndex++)
+            {
+                float u = d / length;
+                float side = lampIndex % 2 == 0 ? -1f : 1f;
+                Vector3 across = AcrossDir(wall);
+                Transform h = HostAt(d);
+                Vector3 foot = At(doorMouth, wall, d, side * (halfWidth - 0.2f), 0f);
+                if (u < 0.38f)
+                {
+                    GameObject lamp = CityKit.BuildStreetLamp(h, foot, -side * across, StreetLampHeight, StreetLampArmLength);
+                    lamp.name = $"Corridor Lamp d{d:0.0}";
+                }
+                else
+                {
+                    Color tone = MaxWorlds.Intro.WorldJoinSequence.CityReefKeyColor(u);
+                    bool gantry = u >= 0.75f;
+                    float mast = gantry ? 3.6f : 3.0f;
+                    var root = new GameObject($"Corridor Lamp d{d:0.0}");
+                    root.transform.SetParent(h, false);
+                    StormdrainKit.AddMeshPart(root.transform, "Post", CharacterMeshes.Beam(mast, 0.07f, 0.05f),
+                        foot + Vector3.up * (mast * 0.5f), SurfaceKind.Metal, new Color(0.10f, 0.12f, 0.14f));
+                    Vector3 head = foot + Vector3.up * mast - side * across * 0.5f;
+                    var lens = StormdrainKit.AddMeshPart(root.transform, gantry ? "Gantry Light" : "Harbour Lantern", CharacterMeshes.Sphere(),
+                        head, SurfaceKind.Metal, tone);
+                    lens.transform.localScale = gantry ? new Vector3(0.34f, 0.14f, 0.34f) : Vector3.one * 0.3f;
+                    lens.GetComponent<Renderer>().sharedMaterial = StormdrainKit.Unlit(tone, gantry ? "GantryLight" : "HarbourLantern");
+                    CityKit.BuildPool(root.transform, new Vector3(foot.x, 0f, foot.z) - side * across * 0.6f, 2.6f, 2.6f, tone, 0.4f);
+                    StormdrainKit.Strip(root);
+                }
+            }
+
+            // --- the Reef's round hull hatch, framing the far end: a ring and a teal glow disc ---
+            Transform end = hosts[2] ?? segA ?? segB;
+            Vector3 hatchAt = At(doorMouth, wall, length - 0.06f, 0f, Mathf.Min(wallHeight * 0.5f, 1.4f));
             float hatchR = Mathf.Min(halfWidth, wallHeight * 0.5f) - 0.05f;
-            var ring = StormdrainKit.AddMeshPart(host, "Reef Hatch Frame", CharacterMeshes.Ring(hatchR - 0.18f, hatchR, 0.12f, 32),
+            var ring = StormdrainKit.AddMeshPart(end, "Reef Hatch Frame", CharacterMeshes.Ring(hatchR - 0.18f, hatchR, 0.12f, 32),
                 hatchAt, SurfaceKind.Metal, HatchFrame);
             ring.transform.localRotation = Quaternion.FromToRotation(Vector3.up, dir);
-            StormdrainKit.Glow(host, "Reef Hatch Glow", hatchAt - dir * 0.02f, Vector3.one * ((hatchR - 0.18f) * 2f),
+            StormdrainKit.Glow(end, "Reef Hatch Glow", hatchAt - dir * 0.02f, Vector3.one * ((hatchR - 0.18f) * 2f),
                 Quaternion.LookRotation(dir, Vector3.up), HatchTeal);
         }
 

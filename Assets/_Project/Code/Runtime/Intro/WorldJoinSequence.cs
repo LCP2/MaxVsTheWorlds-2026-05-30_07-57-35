@@ -861,11 +861,10 @@ namespace MaxWorlds.Intro
             return go;
         }
 
-        // --- MV-1470: City -> Reef continuous corridor.
+        // --- MV-1473: City -> Reef corridor v2 (street slopes down to the waterfront).
         private static readonly Color CityAmberKey = new Color(1.00f, 0.78f, 0.50f);
-        private static readonly Color UnderpassNeutralKey = new Color(0.95f, 0.95f, 0.92f);
+        private static readonly Color HarbourNeutralKey = new Color(0.95f, 0.95f, 0.92f);
         private static readonly Color ReefTealKey = new Color(0.45f, 0.85f, 0.90f);
-        private static readonly Color UnderpassCreamWall = new Color(0.78f, 0.74f, 0.64f);
 
         /// <summary>The corridor's key-light colour at <paramref name="u"/> (0..1 of its length): City
         /// amber -> neutral at the middle -> Reef teal, linear in each half so there is never a step.</summary>
@@ -873,47 +872,167 @@ namespace MaxWorlds.Intro
         {
             u = Mathf.Clamp01(u);
             return u < 0.5f
-                ? Color.Lerp(CityAmberKey, UnderpassNeutralKey, u * 2f)
-                : Color.Lerp(UnderpassNeutralKey, ReefTealKey, (u - 0.5f) * 2f);
+                ? Color.Lerp(CityAmberKey, HarbourNeutralKey, u * 2f)
+                : Color.Lerp(HarbourNeutralKey, ReefTealKey, (u - 0.5f) * 2f);
         }
+
+        // Floor materials in order along the corridor, and the blend span [start, end] (fractions of the
+        // length) between each neighbouring pair. Every change is a gradual blend of at least 10%.
+        private static readonly (string Label, SurfaceKind Kind, Color Tone)[] CrFloor =
+        {
+            ("Tarmac", SurfaceKind.Asphalt, CityKit.Asphalt),
+            ("Paving", SurfaceKind.Pavement, new Color(0.46f, 0.42f, 0.37f)),
+            ("Quay", SurfaceKind.Stone, new Color(0.34f, 0.35f, 0.36f)),
+            ("Timber", SurfaceKind.Wood, new Color(0.40f, 0.28f, 0.17f)),
+            ("Steel", SurfaceKind.Metal, new Color(0.14f, 0.20f, 0.23f)),
+        };
+        private static readonly Vector2[] CrBlend =
+        {
+            new Vector2(0.22f, 0.36f), new Vector2(0.36f, 0.46f), new Vector2(0.56f, 0.66f), new Vector2(0.74f, 0.85f),
+        };
+
+        /// <summary>The floor at <paramref name="u"/>: its material label ("Tarmac", or "Blend_Tarmac_Paving"
+        /// inside a blend), tone, surface, which material it is leaving and how far (0..1) into the next.</summary>
+        public static string CityReefFloorAt(float u, out Color tone, out SurfaceKind kind, out int from, out float mix)
+        {
+            for (int i = 0; i < CrBlend.Length; i++)
+            {
+                if (u < CrBlend[i].x) { from = i; mix = 0f; tone = CrFloor[i].Tone; kind = CrFloor[i].Kind; return CrFloor[i].Label; }
+                if (u < CrBlend[i].y)
+                {
+                    float t = Mathf.SmoothStep(0f, 1f, (u - CrBlend[i].x) / (CrBlend[i].y - CrBlend[i].x));
+                    from = i; mix = t;
+                    tone = Color.Lerp(CrFloor[i].Tone, CrFloor[i + 1].Tone, t);
+                    kind = t < 0.5f ? CrFloor[i].Kind : CrFloor[i + 1].Kind;
+                    return $"Blend_{CrFloor[i].Label}_{CrFloor[i + 1].Label}";
+                }
+            }
+            int last = CrFloor.Length - 1;
+            from = last; mix = 0f; tone = CrFloor[last].Tone; kind = CrFloor[last].Kind;
+            return CrFloor[last].Label;
+        }
+
+        private static readonly Dictionary<string, Material> s_crMats = new Dictionary<string, Material>();
+        private static Material CrMaterial(string label, SurfaceKind kind, Color tone)
+        {
+            string key = $"CR_{label}_{kind}_{Mathf.RoundToInt(tone.r * 255f):X2}{Mathf.RoundToInt(tone.g * 255f):X2}{Mathf.RoundToInt(tone.b * 255f):X2}";
+            if (s_crMats.TryGetValue(key, out var m) && m != null) return m;
+            Material src = MaterialLibrary.Tinted(kind, tone);
+            if (src == null) return null;
+            m = new Material(src) { name = key, hideFlags = HideFlags.HideAndDontSave };
+            s_crMats[key] = m;
+            return m;
+        }
+
+        private static float Hash01(int a, int b)
+        {
+            unchecked
+            {
+                uint h = (uint)(a * 73856093) ^ (uint)(b * 19349663);
+                h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+                return (h & 0xFFFFFF) / (float)0x1000000;
+            }
+        }
+
+        private static readonly Color CrBrick = new Color(0.46f, 0.23f, 0.17f);
+        private static readonly Color CrSteelWall = new Color(0.20f, 0.30f, 0.34f);
+        private static readonly Color CrBankBrick = new Color(0.27f, 0.15f, 0.12f);
+        private static readonly Color CrBankSea = new Color(0.09f, 0.21f, 0.26f);
+        private const float CrQuayLipHeight = 0.45f;
 
         private void BuildContinuousCityReefShell(Transform root, float wallHeight, float wallThickness)
         {
             float length = _entry.CorridorLength;
+            int n = Mathf.Max(1, Mathf.CeilToInt(length));
+            float step = length / n;
             float third = length / 3f;
-            float[] edge = { 0f, third, 2f * third, length };
-
-            // City tarmac -> cream tile -> wet steel; brick -> cream tile -> steel; dark banks brick -> slate -> sea.
-            SurfaceKind[] floorKind = { SurfaceKind.Asphalt, SurfaceKind.Pavement, SurfaceKind.Metal };
-            Color[] floorTone = { CityKit.Asphalt, new Color(0.62f, 0.60f, 0.54f), new Color(0.17f, 0.23f, 0.26f) };
-            SurfaceKind[] wallKind = { SurfaceKind.Stone, SurfaceKind.Stone, SurfaceKind.Metal };
-            Color[] wallTone = { new Color(0.46f, 0.23f, 0.17f), UnderpassCreamWall, new Color(0.20f, 0.30f, 0.34f) };
-            Color[] bankTone = { new Color(0.27f, 0.15f, 0.12f), new Color(0.21f, 0.22f, 0.25f), new Color(0.09f, 0.21f, 0.26f) };
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float width = WorldTransitionEntry.CorridorWidth;
 
             Transform[] segs = new Transform[3];
             string[] labels = { "A", "B", "C" };
-            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
             for (int i = 0; i < 3; i++)
             {
-                Transform seg = new GameObject($"Corridor Segment {labels[i]}").transform;
-                seg.SetParent(root, worldPositionStays: false);
-                segs[i] = seg;
-                float floorEnd = edge[i + 1] + (i == 2 ? FarDoorFloorLanding : 0f);
-                Material floorMat = MaterialLibrary.Tinted(floorKind[i], floorTone[i]);
-                Material wallMat = MaterialLibrary.Tinted(wallKind[i], wallTone[i]);
-                BuildMeshBox(seg, $"Segment {labels[i]} Floor", edge[i], floorEnd, 0f, WorldTransitionEntry.CorridorWidth, 0.1f, -0.05f, floorMat, solid: true);
-                BuildMeshBox(seg, $"Segment {labels[i]} Wall 1", edge[i], edge[i + 1], halfWidth + wallThickness * 0.5f, wallThickness, wallHeight, wallHeight * 0.5f, wallMat, solid: true);
-                BuildMeshBox(seg, $"Segment {labels[i]} Wall 2", edge[i], edge[i + 1], -(halfWidth + wallThickness * 0.5f), wallThickness, wallHeight, wallHeight * 0.5f, wallMat, solid: true);
-
-                // Banks: top level with the wall tops, dark and lit, extended past both ends. The
-                // collider (a trigger, so nothing ever collides with it) covers only the corridor's own span.
-                float bankSide = halfWidth + wallThickness + BankSideWidth * 0.5f;
-                float bMin = i == 0 ? edge[i] - BankEndExtension : edge[i];
-                float bMax = i == 2 ? edge[i + 1] + BankEndExtension : edge[i + 1];
-                Material bankMat = MaterialLibrary.Tinted(SurfaceKind.Stone, bankTone[i]);
-                BuildMeshBox(seg, "Bank E", bMin, bMax, bankSide, BankSideWidth, wallHeight, wallHeight * 0.5f, bankMat, solid: false);
-                BuildMeshBox(seg, "Bank W", bMin, bMax, -bankSide, BankSideWidth, wallHeight, wallHeight * 0.5f, bankMat, solid: false);
+                segs[i] = new GameObject($"Corridor Segment {labels[i]}").transform;
+                segs[i].SetParent(root, worldPositionStays: false);
             }
+
+            for (int i = 0; i < n; i++)
+            {
+                float a0 = i * step, a1 = (i + 1) * step, c = (a0 + a1) * 0.5f;
+                float u = c / length;
+                int si = Mathf.Min(2, Mathf.FloorToInt(c / third));
+                Transform seg = segs[si];
+                bool first = i == 0, last = i == n - 1;
+
+                // --- floor: a continuous blend of materials; patches of the next one creep in ---
+                string label = CityReefFloorAt(u, out Color ftone, out SurfaceKind fkind, out int from, out float mix);
+                float floorEnd = a1 + (last ? FarDoorFloorLanding : 0f);
+                BuildMeshBox(seg, $"Floor {label} d{i}", a0, floorEnd, 0f, width, 0.1f, -0.05f, CrMaterial(label, fkind, ftone), solid: true);
+                if (mix > 0f)
+                {
+                    var next = CrFloor[from + 1];
+                    int cells = Mathf.Max(1, Mathf.RoundToInt(width));
+                    for (int k = 0; k < cells; k++)
+                    {
+                        if (Hash01(i, k) >= mix) continue;
+                        float pLen = step * (0.45f + 0.5f * Hash01(k, i + 31));
+                        float pAcross = 0.5f + 0.7f * Hash01(i + 7, k);
+                        float pAlong = a0 + (step - pLen) * Hash01(i + 3, k + 11) + pLen * 0.5f;
+                        float pSide = -halfWidth + (k + 0.5f) * (width / cells) + (Hash01(k + 5, i) - 0.5f) * 0.3f;
+                        BuildMeshBox(seg, $"Floor Patch {next.Label} d{i}.{k}", pAlong - pLen * 0.5f, pAlong + pLen * 0.5f, pSide, pAcross, 0.012f, 0.006f,
+                            CrMaterial($"Patch_{next.Label}", next.Kind, next.Tone * (0.9f + 0.2f * Hash01(i, k + 9))), solid: false, collider: false);
+                    }
+                }
+
+                // --- north wall (Wall 1): brick -> steel bulkhead ---
+                float nw = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 0.85f, u));
+                BuildMeshBox(seg, $"Segment {labels[si]} d{i} Wall 1", a0, a1, halfWidth + wallThickness * 0.5f, wallThickness, wallHeight, wallHeight * 0.5f,
+                    CrMaterial(nw < 0.5f ? "WallBrick" : "WallSteel", nw < 0.5f ? SurfaceKind.Stone : SurfaceKind.Metal, Color.Lerp(CrBrick, CrSteelWall, nw)), solid: true);
+
+                // --- south wall (Wall 2): brick, then it drops to a low quay lip under the sea railing ---
+                float drop = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.32f, 0.46f, u));
+                float sh = Mathf.Lerp(wallHeight, CrQuayLipHeight, drop);
+                Color stone = Color.Lerp(CrBrick, CrFloor[2].Tone, drop);
+                BuildMeshBox(seg, $"Segment {labels[si]} d{i} Wall 2", a0, a1, -(halfWidth + wallThickness * 0.5f), wallThickness, sh, sh * 0.5f,
+                    CrMaterial("WallSouth", SurfaceKind.Stone, stone), solid: true);
+
+                // --- banks beyond the walls: lit, dark-toned, brick-dark blending to sea-dark ---
+                float bankSide = halfWidth + wallThickness + BankSideWidth * 0.5f;
+                float bMin = first ? a0 - BankEndExtension : a0;
+                float bMax = last ? a1 + BankEndExtension : a1;
+                float bt = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.25f, 0.9f, u));
+                Material bankMat = CrMaterial("Bank", SurfaceKind.Stone, Color.Lerp(CrBankBrick, CrBankSea, bt));
+                BuildMeshBox(seg, "Bank E", bMin, bMax, bankSide, BankSideWidth, wallHeight, wallHeight * 0.5f, bankMat, solid: false);
+                if (u < 0.46f)
+                {
+                    float bh = Mathf.Max(0.2f, Mathf.Lerp(wallHeight, 0.2f, drop));
+                    BuildMeshBox(seg, "Bank W", bMin, bMax, -bankSide, BankSideWidth, bh, bh * 0.5f, bankMat, solid: false);
+                }
+            }
+
+            // --- harbour water beyond the south railing: dark teal with glints (a trigger that still takes rays) ---
+            float waterAlong0 = Mathf.Floor(0.46f * length / step) * step;
+            float waterSide = halfWidth + wallThickness + BankSideWidth * 0.5f;
+            Material water = IntroBuild.Lit("cr_harbour_water", new Color(0.04f, 0.15f, 0.19f), new Color(0.01f, 0.05f, 0.07f));
+            BuildMeshBox(segs[2], "Harbour Water", waterAlong0, length + BankEndExtension, -waterSide, BankSideWidth, 0.1f, -0.3f, water, solid: false);
+            Material glint = StormdrainKit.Unlit(new Color(0.55f, 0.92f, 0.95f), "CityReefWaterGlint");
+            for (int g = 0; g < 28; g++)
+            {
+                float ga = Mathf.Lerp(waterAlong0, length + BankEndExtension - 1f, Hash01(g, 101));
+                float gs = -(halfWidth + wallThickness + 0.3f + 12f * Hash01(g, 202));
+                Vector3 gp = new Vector3(_doorMouth.x, -0.24f, _doorMouth.y) + OutwardDir(_wall) * ga + AcrossDir(_wall) * gs;
+                var gl = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                gl.name = "Water Glint";
+                gl.transform.SetParent(segs[2], false);
+                gl.transform.position = gp;
+                gl.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                gl.transform.localScale = new Vector3(0.3f + 0.3f * Hash01(g, 303), 0.05f, 1f);
+                StormdrainKit.Strip(gl);
+                gl.GetComponent<Renderer>().sharedMaterial = glint;
+                gl.AddComponent<KeepsOwnMaterial>();
+            }
+
             _segmentARoot = segs[0];
             _segmentBRoot = segs[1];
             _segmentCRoot = segs[2];
@@ -924,7 +1043,7 @@ namespace MaxWorlds.Intro
         /// collider clamped to the corridor's own along-range (so it is visible to raycasts but can
         /// never block anything, including the City the extended bank overlaps).</summary>
         private GameObject BuildMeshBox(Transform parent, string name, float alongMin, float alongMax,
-            float acrossOffset, float acrossSize, float height, float centerY, Material mat, bool solid)
+            float acrossOffset, float acrossSize, float height, float centerY, Material mat, bool solid, bool collider = true)
         {
             Vector3 dir = OutwardDir(_wall);
             Vector3 across = AcrossDir(_wall);
@@ -943,6 +1062,7 @@ namespace MaxWorlds.Intro
             var r = go.AddComponent<MeshRenderer>();
             if (mat != null) r.sharedMaterial = mat;
             go.AddComponent<KeepsOwnMaterial>();
+            if (!collider) return go;
 
             var col = go.AddComponent<BoxCollider>();
             if (solid)
