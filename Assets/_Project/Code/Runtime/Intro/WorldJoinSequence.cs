@@ -939,6 +939,7 @@ namespace MaxWorlds.Intro
         private static readonly Color CrBankBrick = new Color(0.27f, 0.15f, 0.12f);
         private static readonly Color CrBankSea = new Color(0.09f, 0.21f, 0.26f);
         private const float CrQuayLipHeight = 0.45f;
+        private const float CrFarEndExtension = 16f;   // the camera must never see the clear colour past the hatch
 
         private void BuildContinuousCityReefShell(Transform root, float wallHeight, float wallThickness)
         {
@@ -1000,7 +1001,7 @@ namespace MaxWorlds.Intro
                 // --- banks beyond the walls: lit, dark-toned, brick-dark blending to sea-dark ---
                 float bankSide = halfWidth + wallThickness + BankSideWidth * 0.5f;
                 float bMin = first ? a0 - BankEndExtension : a0;
-                float bMax = last ? a1 + BankEndExtension : a1;
+                float bMax = last ? a1 + CrFarEndExtension : a1;
                 float bt = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.25f, 0.9f, u));
                 Material bankMat = CrMaterial("Bank", SurfaceKind.Stone, Color.Lerp(CrBankBrick, CrBankSea, bt));
                 BuildMeshBox(seg, "Bank E", bMin, bMax, bankSide, BankSideWidth, wallHeight, wallHeight * 0.5f, bankMat, solid: false);
@@ -1015,11 +1016,14 @@ namespace MaxWorlds.Intro
             float waterAlong0 = Mathf.Floor(0.46f * length / step) * step;
             float waterSide = halfWidth + wallThickness + BankSideWidth * 0.5f;
             Material water = IntroBuild.Lit("cr_harbour_water", new Color(0.04f, 0.15f, 0.19f), new Color(0.01f, 0.05f, 0.07f));
-            BuildMeshBox(segs[2], "Harbour Water", waterAlong0, length + BankEndExtension, -waterSide, BankSideWidth, 0.1f, -0.3f, water, solid: false);
+            BuildMeshBox(segs[2], "Harbour Water", waterAlong0, length + CrFarEndExtension, -waterSide, BankSideWidth, 0.1f, -0.3f, water, solid: false);
+            // beyond the hatch end, between the two banks: dark sea-toned ground, so the camera never sees the clear colour there
+            BuildMeshBox(segs[2], "Bank End", length + FarDoorFloorLanding, length + CrFarEndExtension, 0f, width + 2f * wallThickness, wallHeight, wallHeight * 0.5f,
+                CrMaterial("Bank", SurfaceKind.Stone, CrBankSea), solid: false);
             Material glint = StormdrainKit.Unlit(new Color(0.55f, 0.92f, 0.95f), "CityReefWaterGlint");
             for (int g = 0; g < 28; g++)
             {
-                float ga = Mathf.Lerp(waterAlong0, length + BankEndExtension - 1f, Hash01(g, 101));
+                float ga = Mathf.Lerp(waterAlong0, length + CrFarEndExtension - 1f, Hash01(g, 101));
                 float gs = -(halfWidth + wallThickness + 0.3f + 12f * Hash01(g, 202));
                 Vector3 gp = new Vector3(_doorMouth.x, -0.24f, _doorMouth.y) + OutwardDir(_wall) * ga + AcrossDir(_wall) * gs;
                 var gl = GameObject.CreatePrimitive(PrimitiveType.Quad);

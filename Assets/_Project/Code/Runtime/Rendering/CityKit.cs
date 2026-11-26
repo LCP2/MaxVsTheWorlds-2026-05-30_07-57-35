@@ -469,6 +469,21 @@ namespace MaxWorlds.Rendering
             return go;
         }
 
+        /// <summary>MV-1473: the same soft multi-ring floor pool as <see cref="BuildAmberPool"/>, in any tone
+        /// (the City -> Reef corridor's lamps drift from amber to teal).</summary>
+        public static GameObject BuildSoftPool(Transform parent, Vector3 groundCentre, float radius, Color tone)
+        {
+            var go = new GameObject("Pool");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = groundCentre + Vector3.up * 0.03f;
+            go.AddComponent<MeshFilter>().sharedMesh = SoftDiscMesh(radius);
+            var rend = go.AddComponent<MeshRenderer>();
+            rend.sharedMaterial = StormdrainLightKit.AdditiveUnlit(tone * LampPoolRingStrength, "CityReefPool");
+            go.AddComponent<KeepsOwnMaterial>();
+            StormdrainKit.Strip(go);
+            return go;
+        }
+
         private static Mesh s_softDisc;
         private static Mesh SoftDiscMesh(float radius)
         {

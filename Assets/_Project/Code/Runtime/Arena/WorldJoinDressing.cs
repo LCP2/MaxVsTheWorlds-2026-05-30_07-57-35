@@ -554,7 +554,7 @@ namespace MaxWorlds.Arena
                         head, SurfaceKind.Metal, tone);
                     lens.transform.localScale = gantry ? new Vector3(0.34f, 0.14f, 0.34f) : Vector3.one * 0.3f;
                     lens.GetComponent<Renderer>().sharedMaterial = StormdrainKit.Unlit(tone, gantry ? "GantryLight" : "HarbourLantern");
-                    CityKit.BuildPool(root.transform, new Vector3(foot.x, 0f, foot.z) - side * across * 0.6f, 2.6f, 2.6f, tone, 0.4f);
+                    CityKit.BuildSoftPool(root.transform, new Vector3(foot.x, 0f, foot.z) - side * across * 0.6f, CityKit.LampPoolRadius, tone);
                     StormdrainKit.Strip(root);
                 }
             }
