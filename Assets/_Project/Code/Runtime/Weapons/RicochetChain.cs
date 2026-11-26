@@ -39,7 +39,7 @@ namespace MaxWorlds.Weapons
                     current, current.transform.position, Range, includeDormant: false, alsoExclude: s_visited);
                 if (next == null) break;
 
-                vfx.Arc(current.transform.position + Vector3.up * 0.6f, next.transform.position + Vector3.up * 0.6f);
+                vfx.ChainArc(current.transform.position + Vector3.up * 0.6f, next.transform.position + Vector3.up * 0.6f);
                 RobotFrazzleVfx.Trigger(next);
                 s_visited.Add(next);
                 current = next;

@@ -3460,14 +3460,23 @@ namespace MaxWorlds.Dev
                     robots.Add(BuildClusterRobot(EnemyKind.Rusher, focus + o).GetComponent<RobotEnemy>());
                 Physics.SyncTransforms();
 
-                RicochetDisc disc = RicochetDisc.Spawn(focus + new Vector3(-6f, 0f, -1f), Vector3.right, speed: 8f, bounces: 2,
+                // MV-1469: one bounce - an invisible wall in the disc's path so the lightning trail bends round it.
+                var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                wall.name = "MV1469CaptureWall";
+                UnityEngine.Object.Destroy(wall.GetComponent<MeshRenderer>());
+                wall.transform.position = focus + new Vector3(-1f, 0f, 0f);
+                wall.transform.localScale = new Vector3(0.2f, 3f, 12f);
+                Physics.SyncTransforms();
+
+                RicochetDisc disc = RicochetDisc.Spawn(focus + new Vector3(-5f, 0f, -2.5f), new Vector3(1f, 0f, 0.5f).normalized,
+                    speed: 8f, bounces: 2,
                     powerLevel: 8, aimLevel: 0,
                     damage: 0f, bankBonusPerBounce: 0f, turnRateDegPerSec: 0f, lookaheadMetres: 0f,
                     radius: 0.25f, lifetime: 120f);
-                for (int i = 0; i < 60 && disc != null && disc.IsActiveDisc; i++) disc.Tick(1f / 60f);
+                for (int i = 0; i < 45 && disc != null && disc.IsActiveDisc; i++) disc.Tick(1f / 60f);
 
                 var rot = Quaternion.Euler(72f, 0f, 0f);
-                Vector3 camFocus = focus + new Vector3(5.5f, 0f, 1.0f);
+                Vector3 camFocus = focus + new Vector3(3.5f, 0f, 0.5f);
                 cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * 14f, rot);
                 for (int i = 0; i < 2; i++) yield return null;
 
@@ -3512,7 +3521,7 @@ namespace MaxWorlds.Dev
                 Prepare = Prepare,
                 Shots = new List<CaptureShot>
                 {
-                    new CaptureShot("MV-1451-chain", DiscsSetup),
+                    new CaptureShot("MV-1469-chain", DiscsSetup),
                 },
                 Cleanup = () => RicochetDisc.DestroyPoolForTests(),
             };

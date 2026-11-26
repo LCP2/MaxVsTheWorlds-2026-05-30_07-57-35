@@ -25,6 +25,17 @@ namespace MaxWorlds.VFX
         private const float HoldSeconds = 0.12f;
         private const float RerandomizeAtSeconds = 0.06f;
 
+        // MV-1469: RICOCHET's chain arc: white core, #BFEFFF glow, 9 segments kinked 0.15-0.25 m, held 0.12 s.
+        public const int ChainSegments = 9;
+        public const float ChainMinKink = 0.15f;
+        public const float ChainMaxKink = 0.25f;
+        public const float ChainCoreWidth = 0.04f;
+        public const float ChainGlowWidth = 0.14f;
+        public const float ChainLifetime = 0.20f;
+
+        private int _segments = Segments;
+        private float _minKink;
+        private float _maxKink = JitterMetres;
         private Vector3 _from;
         private Vector3 _to;
         private float _lifetime;
@@ -54,6 +65,25 @@ namespace MaxWorlds.VFX
             return go;
         }
 
+        /// <summary>MV-1469: RICOCHET chain lightning arc (white core, #BFEFFF glow) - never PulseLaser's ARC colours.</summary>
+        public static GameObject ShowChain(Vector3 from, Vector3 to)
+        {
+            var go = new GameObject("ArcBolt");
+            var vfx = go.AddComponent<ArcBoltVfx>();
+            vfx._from = from;
+            vfx._to = to;
+            vfx._lifetime = ChainLifetime;
+            vfx._segments = ChainSegments;
+            vfx._minKink = ChainMinKink;
+            vfx._maxKink = ChainMaxKink;
+            vfx._sleeveBaseColor = new Color(JaggedBolt.GlowColor.r, JaggedBolt.GlowColor.g, JaggedBolt.GlowColor.b, JaggedBolt.GlowColor.a);
+            vfx._coreBaseColor = JaggedBolt.CoreColor;
+            vfx._sleeve = vfx.BuildLine("ArcSleeve", ChainGlowWidth, vfx._sleeveBaseColor);
+            vfx._core = vfx.BuildLine("ArcCore", ChainCoreWidth, vfx._coreBaseColor);
+            vfx.ApplyJaggedPath();
+            return go;
+        }
+
         private void Build(CombatVfxTuning.LppeArcTuning tuning, Color coreColor)
         {
             _sleeveBaseColor = new Color(tuning.SleeveColor.r, tuning.SleeveColor.g, tuning.SleeveColor.b, tuning.SleeveAlpha);
@@ -72,7 +102,7 @@ namespace MaxWorlds.VFX
             child.transform.SetParent(transform, worldPositionStays: true);
 
             var line = child.AddComponent<LineRenderer>();
-            line.positionCount = Segments + 1;
+            line.positionCount = _segments + 1;
             line.widthMultiplier = width;
             line.useWorldSpace = true;
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -95,11 +125,14 @@ namespace MaxWorlds.VFX
             if (perp.sqrMagnitude < 1e-6f) perp = Vector3.right;
             perp.Normalize();
 
-            for (int i = 0; i <= Segments; i++)
+            for (int i = 0; i <= _segments; i++)
             {
-                float t = (float)i / Segments;
+                float t = (float)i / _segments;
                 Vector3 point = Vector3.Lerp(_from, _to, t);
-                if (i > 0 && i < Segments) point += perp * Random.Range(-JitterMetres, JitterMetres);
+                if (i > 0 && i < _segments)
+                    point += perp * (_minKink > 0f
+                        ? Random.Range(_minKink, _maxKink) * (Random.value < 0.5f ? -1f : 1f)
+                        : Random.Range(-_maxKink, _maxKink));
                 _sleeve.SetPosition(i, point);
                 _core.SetPosition(i, point);
             }
