@@ -709,6 +709,8 @@ namespace MaxWorlds.Dev
             Add(BuildMv1435MarksmanWheels());
             Add(BuildMv1448RocketCrate());
             Add(BuildMv1470CityReefCorridor());
+            Add(BuildCityReefCorridorPreset("MV-1473", "mv1473cityreefv2", "-mv1473shot", new[] { 0.15f, 0.50f, 0.85f },
+                new[] { "MV-1473-1-street-15pct", "MV-1473-2-quay-50pct", "MV-1473-3-gantry-85pct" }));
             Add(BuildMv1472CityStreetLook());
             Add(BuildMv1436A5TopDown());
             return d;
@@ -2857,11 +2859,16 @@ namespace MaxWorlds.Dev
         /// <summary>MV-1470 AC2: three shots of the City -> Reef exit corridor from the play camera, one
         /// per section (d = 5, 15, 25 m), saved under Logs/ with each shot's median luminance written to
         /// <c>Logs/MV-1470-luminance.txt</c>. Run via <c>cc-mv1470-capture.bat</c>.</summary>
-        private static CapturePreset BuildMv1470CityReefCorridor()
+        private static CapturePreset BuildMv1470CityReefCorridor() =>
+            BuildCityReefCorridorPreset("MV-1470", "mv1470citreefcorridor", "-mv1470shot", new[] { 5f / 30f, 15f / 30f, 25f / 30f },
+                new[] { "MV-1470-1-station-street", "MV-1470-2-underpass", "MV-1470-3-harbour-gantry" });
+
+        /// <summary>MV-1473 AC2 (and MV-1470's): shots of the City -> Reef corridor at fractions of its length.</summary>
+        private static CapturePreset BuildCityReefCorridorPreset(string ticket, string key, string flag, float[] fractions, string[] names)
         {
             string outDir = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs"));
-            float[] shotD = { 5f, 15f, 25f };
-            string[] names = { "MV-1470-1-station-street", "MV-1470-2-underpass", "MV-1470-3-harbour-gantry" };
+            float[] shotD = new float[fractions.Length];
+            string tag = ticket.Replace("-", "");
             var report = new System.Text.StringBuilder();
             Vector2 doorMouth = default;
             Wall wall = Wall.E;
@@ -2881,6 +2888,7 @@ namespace MaxWorlds.Dev
                     throw new CaptureAbortException("WorldJoinSequence failed to build the City exit corridor");
                 doorMouth = entry.ExitDoorMouth(path.Cfg);
                 wall = entry.ExitWall;
+                for (int f = 0; f < fractions.Length; f++) shotD[f] = fractions[f] * entry.CorridorLength;
                 var hud = FindFirstObjectByType<HudController>();
                 if (hud != null) hud.gameObject.SetActive(false);
 
@@ -2928,20 +2936,20 @@ namespace MaxWorlds.Dev
                     lum[i] = (byte)Mathf.Clamp(Mathf.RoundToInt(0.2126f * px[i].r + 0.7152f * px[i].g + 0.0722f * px[i].b), 0, 255);
                 Array.Sort(lum);
                 report.AppendLine($"{names[idx]} d={shotD[idx]}m median luminance = {lum[lum.Length / 2]}/255");
-                System.IO.File.WriteAllText(System.IO.Path.Combine(outDir, "MV-1470-luminance.txt"), report.ToString());
+                System.IO.File.WriteAllText(System.IO.Path.Combine(outDir, ticket + "-luminance.txt"), report.ToString());
             };
 
             var shots = new List<CaptureShot>();
-            for (int i = 0; i < 3; i++) shots.Add(new CaptureShot(names[i], Setup(i), null, Measure(i)));
+            for (int i = 0; i < names.Length; i++) shots.Add(new CaptureShot(names[i], Setup(i), null, Measure(i)));
 
             return new CapturePreset
             {
-                Key = "mv1470citreefcorridor",
-                LogTag = "[MV1470Capture]",
-                Flag = "-mv1470shot",
-                ArmFile = "Temp/mv1470.arm",
-                HeadlessMarker = "Temp/mv1470.headless",
-                DoneFileName = "_mv1470_done.txt",
+                Key = key,
+                LogTag = $"[{tag}Capture]",
+                Flag = flag,
+                ArmFile = $"Temp/{tag.ToLowerInvariant()}.arm",
+                HeadlessMarker = $"Temp/{tag.ToLowerInvariant()}.headless",
+                DoneFileName = $"_{tag.ToLowerInvariant()}_done.txt",
                 Width = 1600,
                 Height = 1000,
                 OutputDirs = new[] { outDir },
