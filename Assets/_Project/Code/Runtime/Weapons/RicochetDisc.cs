@@ -473,12 +473,15 @@ namespace MaxWorlds.Weapons
         private const float MaxDiscDiameter = 0.60f;
         private const float DiscThickness = 0.06f;
         private const float MinTrailSeconds = 0.15f;
-        private const float MaxTrailSeconds = 0.30f;
+        private const float MaxTrailSeconds = 0.18f; // MV-1469: a short fire smear, never a bar
         private const int MaxEmbers = 8;
         private const int RingSegments = 40;
         private const int MaxHistory = 400;
         private const int MaxRimCrackles = 6;
-        private const int TrailBoltPoints = JaggedBolt.Segments + 1;
+        private const int TrailBoltSegments = 11;
+        private const int TrailBoltPoints = TrailBoltSegments + 1;
+        private const int RimBoltSegments = 4;
+        private const float TrailHeadAlpha = 0.55f;
         private const float MinGlowDiameter = 0.6f;
         private const float MaxGlowDiameter = 1.0f;
         private static readonly float[] TrailBoltMetres = { 1.0f, 1.5f, 2.0f, 3.0f };
@@ -654,8 +657,8 @@ namespace MaxWorlds.Weapons
 
             parts.RimBolts = new JaggedBolt[MaxRimCrackles];
             for (int i = 0; i < MaxRimCrackles; i++)
-                parts.RimBolts[i] = new JaggedBolt(parent, "RimCrackle" + i, false, 0.07f, 0.02f);
-            parts.TrailBolt = new JaggedBolt(parent, "LightningTrail", true, 0.12f, 0.035f);
+                parts.RimBolts[i] = new JaggedBolt(parent, "RimCrackle" + i, false, 0.08f, 0.03f, RimBoltSegments);
+            parts.TrailBolt = new JaggedBolt(parent, "LightningTrail", true, 0.14f, 0.04f, TrailBoltSegments);
             return parts;
         }
 
@@ -796,6 +799,8 @@ namespace MaxWorlds.Weapons
         }
 
         /// <summary>From POWER 6 the fire part of the trail tints toward pale cyan (0 below POWER 6).</summary>
+        private const float TrailCyanFront = 0.25f;
+
         private static float TrailCyanTint(int powerLevel) =>
             powerLevel < 6 ? 0f : Mathf.Lerp(0.6f, 1f, (powerLevel - 6) / 2f);
 
@@ -819,11 +824,11 @@ namespace MaxWorlds.Weapons
                     Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
                     Vector3 start = dir * r;
                     Vector3 end = start + dir * Random.Range(0.25f, 0.5f);
-                    _rimBolts[i].Randomize(start, end, 0.05f);
+                    _rimBolts[i].Randomize(start, end, 0.05f, 0.09f);
                 }
             }
             for (int i = 0; i < _trailJitter.Length; i++)
-                _trailJitter[i] = (i == 0 || i == _trailJitter.Length - 1) ? 0f : Random.Range(-0.09f, 0.09f);
+                _trailJitter[i] = (i == 0 || i == _trailJitter.Length - 1) ? 0f : Random.Range(0.10f, 0.18f) * (Random.value < 0.5f ? -1f : 1f);
         }
 
         /// <summary>Walks back along the disc's recorded path for the bolt's length, so the bolt follows
@@ -867,18 +872,21 @@ namespace MaxWorlds.Weapons
         private static Gradient TrailGradient(float t, float cyanTint)
         {
             var g = new Gradient();
-            var alpha = new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) };
+            var alpha = new[] { new GradientAlphaKey(TrailHeadAlpha, 0f), new GradientAlphaKey(0f, 1f) };
             if (t <= 1e-4f)
             {
                 g.SetKeys(new[] { new GradientColorKey(DiscColor, 0f), new GradientColorKey(DiscColor, 1f) }, alpha);
                 return g;
             }
-            // Fire (orange -> red) over [0, t], then a short step into the blue remainder.
+            // Fire (orange -> red) over [0, t], then a short step into the blue remainder. MV-1469: only
+            // the FRONT quarter tints toward pale cyan; the rest keeps the fire colours.
             var keys = new List<GradientColorKey>
             {
                 new GradientColorKey(Color.Lerp(FlameOrange, PaleCyan, cyanTint), 0f),
-                new GradientColorKey(Color.Lerp(FlameRed, PaleCyan, cyanTint), t),
             };
+            if (cyanTint > 0f)
+                keys.Add(new GradientColorKey(Color.Lerp(FlameOrange, FlameRed, TrailCyanFront / t), TrailCyanFront));
+            keys.Add(new GradientColorKey(FlameRed, t));
             float step = Mathf.Min(1f, t + 0.04f);
             if (t < 1f)
             {

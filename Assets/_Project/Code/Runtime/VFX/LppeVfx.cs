@@ -190,6 +190,21 @@ namespace MaxWorlds.VFX
                 colorA: ArcColor, colorB: ArcColor);
         }
 
+        /// <summary>MV-1469: RICOCHET's chain arc - white core, #BFEFFF glow, same flash as <see cref="Arc"/>.
+        /// PulseLaser's ARC keeps <see cref="Arc"/> and its own colours.</summary>
+        public void ChainArc(Vector3 from, Vector3 to)
+        {
+            if (!_initialized) return;
+            CombatVfxTuning.LppeArcTuning t = CombatVfxTuning.LppeArc();
+            ArcBoltVfx.ShowChain(from, to);
+            _arcFlash.Emit(to, 1,
+                axis: Vector3.up, spreadDegrees: 0f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: t.FlashSize, sizeMax: t.FlashSize,
+                lifeMin: t.FlashLifetime, lifeMax: t.FlashLifetime,
+                colorA: JaggedBolt.GlowColor, colorB: JaggedBolt.GlowColor);
+        }
+
         private static void Emit(VfxBurst flash, VfxBurst sparks, Vector3 point,
             CombatVfxTuning.LppeImpactTuning t, Color flashColor, Color sparkColor)
         {
