@@ -449,14 +449,88 @@ namespace MaxWorlds.Arena
 
         private static float NorthSign(Wall wall) => AcrossDir(wall).z >= 0f ? 1f : -1f;
 
-        /// <summary>Segment A (outfall), B (breach) and C (hull) — MV-964's own three fixed-distance
-        /// stretches for the World 2 -> World 3 row, dressed per the ticket's own d-ranges.</summary>
+        // MV-1470: the City -> Reef exit corridor. Three equal sections (the shell builds its three
+        // segments at thirds for this row), one continuous themed run: station street -> tiled
+        // underpass -> harbour gantry ending at the Reef's round hull hatch.
+        private static readonly Color UnderpassCream = new Color(0.80f, 0.76f, 0.66f);
+        private static readonly Color StripLightWhite = new Color(1f, 0.99f, 0.93f);
+        private static readonly Color GantryRope = new Color(0.62f, 0.50f, 0.32f);
+        private static readonly Color GantryBollard = new Color(0.16f, 0.20f, 0.22f);
+        private static readonly Color GratingBar = new Color(0.07f, 0.10f, 0.12f);
+        private static readonly Color HatchTeal = new Color(0.30f, 0.85f, 0.88f);
+        private static readonly Color HatchFrame = new Color(0.10f, 0.22f, 0.26f);
+
+        /// <summary>The City -> Reef corridor's three sections (MV-1470). Segment A = station street,
+        /// B = underpass, C = harbour gantry; each is one third of the corridor length.</summary>
         public static void DressExitReef(Transform segA, Transform segB, Transform segC,
             Vector2 doorMouth, Wall wall, float wallHeight, WorldTransitionEntry entry)
         {
-            if (segA != null) DressOutfall(segA, doorMouth, wall, wallHeight, entry.SegmentAEnd);
-            if (segB != null) DressBreach(segB, doorMouth, wall, wallHeight, entry.SegmentAEnd, entry.SegmentBEnd);
-            if (segC != null) DressHullSegment(segC, doorMouth, wall, wallHeight, entry.SegmentBEnd, entry.CorridorLength, isArrival: false);
+            float third = entry.CorridorLength / 3f;
+            if (segA != null) DressStationStreet(segA, doorMouth, wall, wallHeight, 0f, third);
+            if (segB != null) DressUnderpass(segB, doorMouth, wall, wallHeight, third, 2f * third);
+            if (segC != null) DressHarbourGantry(segC, doorMouth, wall, wallHeight, 2f * third, entry.CorridorLength);
+        }
+
+        private static void DressStationStreet(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float d0, float d1)
+        {
+            DressCityStreetStrip(host, doorMouth, wall, d0, d1);
+            CityKit.BuildDashedLine(host, Pt(doorMouth, wall, d0 + 0.5f, 0f), Pt(doorMouth, wall, d1 - 0.5f, 0f), 1.2f, 1.0f, 0.14f);
+
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            Vector3 across = AcrossDir(wall);
+            CityKit.BuildStreetLamp(host, At(doorMouth, wall, d0 + (d1 - d0) * 0.25f, -(halfWidth - 0.2f), 0f), across,
+                StreetLampHeight, StreetLampArmLength);
+            CityKit.BuildStreetLamp(host, At(doorMouth, wall, d0 + (d1 - d0) * 0.75f, halfWidth - 0.2f, 0f), -across,
+                StreetLampHeight, StreetLampArmLength);
+        }
+
+        private static void DressUnderpass(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float d0, float d1)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float y = wallHeight * 0.82f;
+            for (float d = d0 + 1.0f; d + 1.6f <= d1 + 0.01f; d += 2.5f)
+                foreach (float side in new[] { 1f, -1f })
+                    Bar(host, $"Underpass Strip Light d{d:0.0}", doorMouth, wall, d, d + 1.6f, side * (halfWidth - 0.06f), 0.1f, 0.08f, y,
+                        StripLightWhite);
+
+            // Tiled-floor joints every 2 m, the whole underpass.
+            for (float d = d0 + 1f; d < d1; d += 2f)
+                Bar(host, $"Underpass Tile Joint d{d:0.0}", doorMouth, wall, d - 0.02f, d + 0.02f, 0f, WorldTransitionEntry.CorridorWidth - 0.2f,
+                    0.012f, 0.006f, new Color(0.30f, 0.31f, 0.33f), SurfaceKind.Stone);
+        }
+
+        private static void DressHarbourGantry(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float d0, float d1)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            Vector3 dir = OutwardDir(wall);
+            Quaternion lie = Quaternion.LookRotation(dir, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+
+            // Wet-steel grating: dark cross bars every metre across the floor.
+            for (float d = d0 + 0.5f; d < d1; d += 1f)
+                Bar(host, $"Gantry Grating d{d:0.0}", doorMouth, wall, d - 0.04f, d + 0.04f, 0f, WorldTransitionEntry.CorridorWidth - 0.2f,
+                    0.014f, 0.007f, GratingBar, SurfaceKind.Metal);
+
+            // Bollards every 4 m and a rope rail along both walls.
+            foreach (float side in new[] { 1f, -1f })
+            {
+                float across = side * (halfWidth - 0.3f);
+                for (float d = d0 + 1.5f; d <= d1 - 1.5f + 0.01f; d += 4f)
+                    StormdrainKit.AddMeshPart(host, $"Gantry Bollard d{d:0.0}", CharacterMeshes.Beam(0.7f, 0.13f, 0.1f),
+                        At(doorMouth, wall, d, across, 0.35f), SurfaceKind.Metal, GantryBollard);
+
+                float ropeStart = d0 + 1.5f, ropeEnd = d1 - 1.5f;
+                Vector3 mid = At(doorMouth, wall, (ropeStart + ropeEnd) * 0.5f, across, 0.62f);
+                StormdrainKit.Tube(host, "Gantry Rope Rail", mid, 0.03f, ropeEnd - ropeStart, lie, GantryRope);
+            }
+
+            // The Reef's round hull hatch, framing the far end: a ring and a teal glow disc.
+            Vector3 hatchAt = At(doorMouth, wall, d1 - 0.06f, 0f, Mathf.Min(wallHeight * 0.5f, 1.4f));
+            float hatchR = Mathf.Min(halfWidth, wallHeight * 0.5f) - 0.05f;
+            var ring = StormdrainKit.AddMeshPart(host, "Reef Hatch Frame", CharacterMeshes.Ring(hatchR - 0.18f, hatchR, 0.12f, 32),
+                hatchAt, SurfaceKind.Metal, HatchFrame);
+            ring.transform.localRotation = Quaternion.FromToRotation(Vector3.up, dir);
+            StormdrainKit.Glow(host, "Reef Hatch Glow", hatchAt - dir * 0.02f, Vector3.one * ((hatchR - 0.18f) * 2f),
+                Quaternion.LookRotation(dir, Vector3.up), HatchTeal);
         }
 
         /// <summary>The World 3 arrival shell — segment C's own hull dressing continued (MV-967's own

@@ -338,6 +338,15 @@ namespace MaxWorlds.Intro
             BiomePalette to = WorldCatalog.Get(toWorld).Palette;
             string keyPrefix = $"join{_fromWorldIndex}";
 
+            // MV-1470: the City -> Reef corridor is one continuous themed run built from generated
+            // meshes (no primitive cubes, solid banks, no lighting step), not the generic three-segment shell.
+            if (WorldCatalog.Get(_fromWorldIndex).ExitDressing == ExitCorridorDressingKind.ExitReef)
+            {
+                BuildContinuousCityReefShell(root, wallHeight, wallThickness);
+                WorldJoinDressing.DressExitReef(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
+                return;
+            }
+
             Color groundA = from.ColorFor(SurfaceKind.Ground);
             Color groundB = Color.Lerp(from.ColorFor(SurfaceKind.Ground), to.ColorFor(SurfaceKind.Ground), 0.5f);
             Color groundC = to.ColorFor(SurfaceKind.Ground);
@@ -852,6 +861,108 @@ namespace MaxWorlds.Intro
             return go;
         }
 
+        // --- MV-1470: City -> Reef continuous corridor.
+        private static readonly Color CityAmberKey = new Color(1.00f, 0.78f, 0.50f);
+        private static readonly Color UnderpassNeutralKey = new Color(0.95f, 0.95f, 0.92f);
+        private static readonly Color ReefTealKey = new Color(0.45f, 0.85f, 0.90f);
+        private static readonly Color UnderpassCreamWall = new Color(0.78f, 0.74f, 0.64f);
+
+        /// <summary>The corridor's key-light colour at <paramref name="u"/> (0..1 of its length): City
+        /// amber -> neutral at the middle -> Reef teal, linear in each half so there is never a step.</summary>
+        public static Color CityReefKeyColor(float u)
+        {
+            u = Mathf.Clamp01(u);
+            return u < 0.5f
+                ? Color.Lerp(CityAmberKey, UnderpassNeutralKey, u * 2f)
+                : Color.Lerp(UnderpassNeutralKey, ReefTealKey, (u - 0.5f) * 2f);
+        }
+
+        private void BuildContinuousCityReefShell(Transform root, float wallHeight, float wallThickness)
+        {
+            float length = _entry.CorridorLength;
+            float third = length / 3f;
+            float[] edge = { 0f, third, 2f * third, length };
+
+            // City tarmac -> cream tile -> wet steel; brick -> cream tile -> steel; dark banks brick -> slate -> sea.
+            SurfaceKind[] floorKind = { SurfaceKind.Asphalt, SurfaceKind.Pavement, SurfaceKind.Metal };
+            Color[] floorTone = { CityKit.Asphalt, new Color(0.62f, 0.60f, 0.54f), new Color(0.17f, 0.23f, 0.26f) };
+            SurfaceKind[] wallKind = { SurfaceKind.Stone, SurfaceKind.Stone, SurfaceKind.Metal };
+            Color[] wallTone = { new Color(0.46f, 0.23f, 0.17f), UnderpassCreamWall, new Color(0.20f, 0.30f, 0.34f) };
+            Color[] bankTone = { new Color(0.27f, 0.15f, 0.12f), new Color(0.21f, 0.22f, 0.25f), new Color(0.09f, 0.21f, 0.26f) };
+
+            Transform[] segs = new Transform[3];
+            string[] labels = { "A", "B", "C" };
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            for (int i = 0; i < 3; i++)
+            {
+                Transform seg = new GameObject($"Corridor Segment {labels[i]}").transform;
+                seg.SetParent(root, worldPositionStays: false);
+                segs[i] = seg;
+                float floorEnd = edge[i + 1] + (i == 2 ? FarDoorFloorLanding : 0f);
+                Material floorMat = MaterialLibrary.Tinted(floorKind[i], floorTone[i]);
+                Material wallMat = MaterialLibrary.Tinted(wallKind[i], wallTone[i]);
+                BuildMeshBox(seg, $"Segment {labels[i]} Floor", edge[i], floorEnd, 0f, WorldTransitionEntry.CorridorWidth, 0.1f, -0.05f, floorMat, solid: true);
+                BuildMeshBox(seg, $"Segment {labels[i]} Wall 1", edge[i], edge[i + 1], halfWidth + wallThickness * 0.5f, wallThickness, wallHeight, wallHeight * 0.5f, wallMat, solid: true);
+                BuildMeshBox(seg, $"Segment {labels[i]} Wall 2", edge[i], edge[i + 1], -(halfWidth + wallThickness * 0.5f), wallThickness, wallHeight, wallHeight * 0.5f, wallMat, solid: true);
+
+                // Banks: top level with the wall tops, dark and lit, extended past both ends. The
+                // collider (a trigger, so nothing ever collides with it) covers only the corridor's own span.
+                float bankSide = halfWidth + wallThickness + BankSideWidth * 0.5f;
+                float bMin = i == 0 ? edge[i] - BankEndExtension : edge[i];
+                float bMax = i == 2 ? edge[i + 1] + BankEndExtension : edge[i + 1];
+                Material bankMat = MaterialLibrary.Tinted(SurfaceKind.Stone, bankTone[i]);
+                BuildMeshBox(seg, "Bank E", bMin, bMax, bankSide, BankSideWidth, wallHeight, wallHeight * 0.5f, bankMat, solid: false);
+                BuildMeshBox(seg, "Bank W", bMin, bMax, -bankSide, BankSideWidth, wallHeight, wallHeight * 0.5f, bankMat, solid: false);
+            }
+            _segmentARoot = segs[0];
+            _segmentBRoot = segs[1];
+            _segmentCRoot = segs[2];
+        }
+
+        /// <summary>A world-axis-aligned box built from a generated (chamfered) mesh, never Unity's
+        /// built-in cube. <paramref name="solid"/> gives it a normal collider; otherwise a trigger
+        /// collider clamped to the corridor's own along-range (so it is visible to raycasts but can
+        /// never block anything, including the City the extended bank overlaps).</summary>
+        private GameObject BuildMeshBox(Transform parent, string name, float alongMin, float alongMax,
+            float acrossOffset, float acrossSize, float height, float centerY, Material mat, bool solid)
+        {
+            Vector3 dir = OutwardDir(_wall);
+            Vector3 across = AcrossDir(_wall);
+            float mid = (alongMin + alongMax) * 0.5f;
+            float length = alongMax - alongMin;
+            Vector3 center = new Vector3(_doorMouth.x, centerY, _doorMouth.y) + dir * mid + across * acrossOffset;
+            Vector3 size = new Vector3(
+                Mathf.Abs(dir.x) * length + Mathf.Abs(across.x) * acrossSize,
+                height,
+                Mathf.Abs(dir.z) * length + Mathf.Abs(across.z) * acrossSize);
+
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, worldPositionStays: false);
+            go.transform.position = center;
+            go.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Bevelled(size, 0.01f);
+            var r = go.AddComponent<MeshRenderer>();
+            if (mat != null) r.sharedMaterial = mat;
+            go.AddComponent<KeepsOwnMaterial>();
+
+            var col = go.AddComponent<BoxCollider>();
+            if (solid)
+            {
+                col.size = size;
+            }
+            else
+            {
+                col.isTrigger = true;
+                float cMin = Mathf.Max(alongMin, 0f), cMax = Mathf.Min(alongMax, _entry.CorridorLength);
+                float cLen = Mathf.Max(0.01f, cMax - cMin);
+                col.center = dir * ((cMin + cMax) * 0.5f - mid);
+                col.size = new Vector3(
+                    Mathf.Abs(dir.x) * cLen + Mathf.Abs(across.x) * acrossSize,
+                    height,
+                    Mathf.Abs(dir.z) * cLen + Mathf.Abs(across.z) * acrossSize);
+            }
+            return go;
+        }
+
         /// <summary>MV-1123 §2: solid banks outside both walls, replacing the old floor-level ground
         /// apron (MV-1076) -- the camera used to look either over the low apron into a void (MV-1076's
         /// own fix) or, once that shipped, into a flat slab that read as filling the whole view (Lee
@@ -1146,6 +1257,15 @@ namespace MaxWorlds.Intro
         {
             if (_lighting == null) return;
             float along = AlongDistance(_playerT.position, _doorMouth, _wall);
+            if (WorldCatalog.Get(_fromWorldIndex).ExitDressing == ExitCorridorDressingKind.ExitReef)
+            {
+                // MV-1470: one smooth blend over the WHOLE corridor, no 0.73 plateau.
+                float u = Mathf.Clamp01(along / _entry.CorridorLength);
+                BackyardLook look = BackyardLook.Lerp(WorldCatalog.Get(_fromWorldIndex).Look, WorldCatalog.Get(_fromWorldIndex + 1).Look, u);
+                look.KeyColor = CityReefKeyColor(u);
+                _lighting.Apply(look);
+                return;
+            }
             float t = Mathf.Clamp01(along / (LightingBlendFraction * _entry.CorridorLength));
             _lighting.Apply(BackyardLook.Lerp(WorldCatalog.Get(_fromWorldIndex).Look, WorldCatalog.Get(_fromWorldIndex + 1).Look, t));
         }
