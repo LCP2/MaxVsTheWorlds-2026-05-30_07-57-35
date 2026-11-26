@@ -619,21 +619,22 @@ namespace MaxWorlds.Rendering
         /// past the grain alone.</summary>
         private static float[] AsphaltHeight(int size)
         {
+            // MV-1472: Lee, 26 Nov — "plain... soft blob pattern". The MV-1205 version carved 1-3 m
+            // thresholded-noise blobs; this one is fine grain + sparse aggregate speckle + occasional
+            // hard-edged (rectangular) repair patches, never a blob or a wave. The tile is ~4 m, so a
+            // 4x4 grid is 1 m cells; a minority of cells are re-laid a touch lighter or darker.
             return Height($"asphaltH{size}", size, (u, v) =>
             {
-                // A single un-averaged noise layer, not FBM: averaging octaves is exactly what tames
-                // variance toward the centre, and a flattened grain is the pre-fix defect this ticket
-                // exists to undo (AC1's own std-dev floor is measuring precisely this).
-                float grain = Noise(u * 30f, v * 30f, 30, 30);
+                float grain = Noise(u * 96f, v * 96f, 96, 96);                 // ~4 cm grain
 
-                // baseFreq 3 over the kind's own ~4 m tile puts a patch cell at ~1.3 m — inside the
-                // ticket's 1-3 m range. A single un-averaged octave plus a NARROW threshold band
-                // carves distinct, mostly-binary patches rather than a soft gradient — bimodal mass
-                // at the extremes is what a bounded 0..1 range needs to carry real variance.
-                float patchRaw = Fbm(u, v, baseFreq: 3, octaves: 1);
-                float patch = Curve(0.50f, 0.62f, patchRaw);
+                float speck = Noise(u * 160f, v * 160f, 160, 160);             // aggregate chips
+                float chips = speck > 0.88f ? 1f : (speck < 0.06f ? -1f : 0f);
 
-                return grain * 0.35f + patch * 0.65f;
+                int cx = Mathf.FloorToInt(u * 4f), cy = Mathf.FloorToInt(v * 4f);
+                float cell = Hash(cx, cy, 4, 4);
+                float patch = cell > 0.86f ? 1f : (cell < 0.10f ? -1f : 0f);   // repair patches, hard edged
+
+                return 0.5f + (grain - 0.5f) * 0.90f + chips * 0.10f + patch * 0.10f;
             });
         }
 

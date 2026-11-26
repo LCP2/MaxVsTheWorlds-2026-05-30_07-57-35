@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.VFX;
@@ -39,11 +40,19 @@ namespace MaxWorlds.Rendering
         // MV-1205: lifted from Rgb(52, 56, 72) (mean ~0.235 linear) — Lee's TestFlight shot (17 Oct)
         // read the road as "nondescript... I don't feel like I'm standing on anything" at that value,
         // and the ticket's own number is "about 0.32 linear".
-        public static readonly Color Asphalt = new Color(0.28f, 0.32f, 0.36f);
+        public static readonly Color Asphalt = Rgb(40, 38, 37);   // MV-1472: dark neutral-warm tarmac (was blue-grey 0.28,0.32,0.36)
+
+        /// <summary>MV-1472: the street lamps' pool tone, about #FFA03A.</summary>
+        public static readonly Color PoolAmber = Rgb(255, 160, 58);
+        /// <summary>MV-1472: yellow road paint (double centre line). Luminance well under 160.</summary>
+        public static readonly Color PaintYellow = Rgb(190, 146, 40);
+        /// <summary>MV-1472: slightly different repair patch tone is baked into the asphalt texture;
+        /// this is the white lane paint, kept under luminance 160 so it never outshines a robot's eyes.</summary>
+        public static readonly Color PaintWhite = Rgb(150, 148, 142);
 
         // MV-1205: "lighter than the road, about 0.45 linear" (was Rgb(112, 118, 134), mean ~0.476 —
         // already close; nudged to land exactly on the ticket's number on the same blue-grey hue).
-        public static readonly Color Pavement = new Color(0.41f, 0.44f, 0.50f);
+        public static readonly Color Pavement = Rgb(64, 60, 56);   // MV-1472: warm concrete (was blue-grey 0.41,0.44,0.50)
 
         // MV-1205: "15% lighter than the pavement" — derived, not authored, so the relationship the
         // ticket asks for can never drift out of step with Pavement.
@@ -439,6 +448,110 @@ namespace MaxWorlds.Rendering
             return go;
         }
 
+        /// <summary>MV-1472: a lamp pool is 4-6 m across (radius 3.0 m = 6 m).</summary>
+        public const float LampPoolRadius = 3.0f;
+        /// <summary>Per-ring additive strength of the amber pool; ten stacked rings sum to ~10x at the centre.</summary>
+        public const float LampPoolRingStrength = 0.24f;
+
+        /// <summary>MV-1472: a soft amber floor pool named "Pool" — ten concentric discs in ONE generated mesh
+        /// (additive, so the overlaps stack into a bright core fading to the rim) instead of the old flat
+        /// hard-edged disc. One renderer, one draw call.</summary>
+        public static GameObject BuildAmberPool(Transform parent, Vector3 groundCentre, float radius)
+        {
+            var go = new GameObject("Pool");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = groundCentre + Vector3.up * 0.03f;
+            go.AddComponent<MeshFilter>().sharedMesh = SoftDiscMesh(radius);
+            var rend = go.AddComponent<MeshRenderer>();
+            rend.sharedMaterial = StormdrainLightKit.AdditiveUnlit(PoolAmber * LampPoolRingStrength, "CityAmberPool");
+            go.AddComponent<KeepsOwnMaterial>();
+            StormdrainKit.Strip(go);
+            return go;
+        }
+
+        private static Mesh s_softDisc;
+        private static Mesh SoftDiscMesh(float radius)
+        {
+            if (s_softDisc != null && Mathf.Approximately(s_softDiscRadius, radius)) return s_softDisc;
+            float[] rings = { 1f, 0.9f, 0.8f, 0.7f, 0.6f, 0.5f, 0.4f, 0.3f, 0.2f, 0.1f };
+            const int seg = 28;
+            var v = new List<Vector3>();
+            var n = new List<Vector3>();
+            var t = new List<int>();
+            foreach (float k in rings)
+            {
+                int c = v.Count;
+                v.Add(Vector3.zero); n.Add(Vector3.up);
+                for (int i = 0; i < seg; i++)
+                {
+                    float a = (float)i / seg * Mathf.PI * 2f;
+                    v.Add(new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (radius * k)); n.Add(Vector3.up);
+                }
+                for (int i = 0; i < seg; i++) { t.Add(c); t.Add(c + 1 + (i + 1) % seg); t.Add(c + 1 + i); }
+            }
+            s_softDisc = new Mesh { name = "CityAmberPoolDisc" };
+            s_softDisc.SetVertices(v); s_softDisc.SetNormals(n); s_softDisc.SetTriangles(t, 0);
+            s_softDisc.RecalculateBounds();
+            s_softDiscRadius = radius;
+            return s_softDisc;
+        }
+        private static float s_softDiscRadius;
+
+        // ---------------------------------------------------------------- road markings (generated mesh)
+
+        /// <summary>MV-1472: accumulates flat paint quads (axis-aligned or rotated about Y) into ONE generated
+        /// mesh per colour, so a whole area's lane paint is two draw calls, not hundreds of boxes.</summary>
+        public sealed class PaintBatch
+        {
+            private readonly List<Vector3> _v = new List<Vector3>();
+            private readonly List<int> _t = new List<int>();
+            public int QuadCount { get; private set; }
+
+            /// <summary>Flat quad centred at (cx, cz), half-extents (hx along dir, hz across), yawed so +X maps to dir.</summary>
+            public void Quad(float cx, float cz, float length, float width, Vector2 dir)
+            {
+                Vector2 d = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector2.right;
+                Vector2 p = new Vector2(-d.y, d.x);
+                Vector2 c = new Vector2(cx, cz);
+                Vector2 a = c - d * (length * 0.5f) - p * (width * 0.5f);
+                Vector2 b = c + d * (length * 0.5f) - p * (width * 0.5f);
+                Vector2 e = c + d * (length * 0.5f) + p * (width * 0.5f);
+                Vector2 f = c - d * (length * 0.5f) + p * (width * 0.5f);
+                int i = _v.Count;
+                _v.Add(new Vector3(a.x, 0f, a.y)); _v.Add(new Vector3(b.x, 0f, b.y));
+                _v.Add(new Vector3(e.x, 0f, e.y)); _v.Add(new Vector3(f.x, 0f, f.y));
+                _t.Add(i); _t.Add(i + 2); _t.Add(i + 1); _t.Add(i); _t.Add(i + 3); _t.Add(i + 2);
+                QuadCount++;
+            }
+
+            /// <summary>Dashed run from a to b.</summary>
+            public void Dashes(Vector2 a, Vector2 b, float dash, float gap, float width)
+            {
+                Vector2 d = b - a; float len = d.magnitude;
+                if (len < 0.01f) return;
+                Vector2 dir = d / len; float pitch = dash + gap;
+                for (float s = 0f; s + dash <= len + 0.001f; s += pitch)
+                    Quad(a.x + dir.x * (s + dash * 0.5f), a.y + dir.y * (s + dash * 0.5f), dash, width, dir);
+            }
+
+            public GameObject Build(Transform parent, string name, Color tone, float y = 0.016f)
+            {
+                if (QuadCount == 0) return null;
+                var go = new GameObject(name);
+                go.transform.SetParent(parent, false);
+                go.transform.localPosition = new Vector3(0f, y, 0f);
+                var m = new Mesh { name = name + " Mesh" };
+                m.SetVertices(_v); m.SetTriangles(_t, 0);
+                m.RecalculateNormals(); m.RecalculateBounds();
+                go.AddComponent<MeshFilter>().sharedMesh = m;
+                var rend = go.AddComponent<MeshRenderer>();
+                rend.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Stone, tone);
+                go.AddComponent<KeepsOwnMaterial>();
+                StormdrainKit.Strip(go);
+                return go;
+            }
+        }
+
         // ---------------------------------------------------------------- building faces
 
         /// <summary>A run of shop units — <c>round(length / 7)</c> of them — each a facade, four warm
@@ -592,7 +705,7 @@ namespace MaxWorlds.Rendering
             Vector3 headPos = armStart + a * arm;
             StormdrainKit.Box(root, "Head", headPos, new Vector3(0.4f, 0.14f, 0.62f), LampHead);
 
-            BuildPool(root, new Vector3(headPos.x, 0f, headPos.z), 3.2f, 3.2f, LampHead, 0.26f);
+            BuildAmberPool(root, new Vector3(headPos.x, 0f, headPos.z), LampPoolRadius);
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
