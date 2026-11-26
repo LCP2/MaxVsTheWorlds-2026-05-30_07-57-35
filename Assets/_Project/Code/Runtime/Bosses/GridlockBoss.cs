@@ -710,9 +710,16 @@ namespace MaxWorlds.Bosses
         private void OnDeath()
         {
             _phase = Phase.Dead;
+            // MV-1471: she no longer blocks Max or takes a hit while the shared death sequence plays
+            // (GridlockRig owns it) -- the controller goes, the body stays up. Tick() does nothing in
+            // Phase.Dead (no approach, touch or attacks), and TakeDamage refuses once !IsAlive.
+            if (_cc != null) _cc.enabled = false;
             BossCensus.ReportDefeated(this);
-            gameObject.SetActive(false);
         }
+
+        /// <summary>MV-1471: called by <see cref="MaxWorlds.VFX.GridlockRig"/> when its death sequence
+        /// finishes -- the only place the dead body is hidden.</summary>
+        public void HideBody() => gameObject.SetActive(false);
 
         private void AcquireTarget()
         {

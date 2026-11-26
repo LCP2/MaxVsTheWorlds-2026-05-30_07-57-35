@@ -152,6 +152,8 @@ namespace MaxWorlds.VFX
         private HexapodGaitDriver _gait;
         private float _rigScale;
         private bool _dying;
+        private BossDeathSequence _deathSeq;
+        private readonly System.Collections.Generic.List<MeshRenderer> _rackLights = new System.Collections.Generic.List<MeshRenderer>(24);
 
         /// <summary>The boss this rig is bound to — same "a caller can match a rig back to its own
         /// boss" reasoning as every other boss rig's own <c>Boss</c> getter.</summary>
@@ -159,18 +161,18 @@ namespace MaxWorlds.VFX
 
         private void OnEnable()
         {
-            HudSignals.BossDefeated += OnDefeated;
+            HudSignals.BossKilled += OnKilled;
             HudSignals.GridlockShieldBlocked += OnShieldBlocked;
         }
 
         private void OnDisable()
         {
-            HudSignals.BossDefeated -= OnDefeated;
+            HudSignals.BossKilled -= OnKilled;
             HudSignals.GridlockShieldBlocked -= OnShieldBlocked;
         }
 
         /// <summary>MV-1309: only one GRIDLOCK (and one rig) ever exists in the game, so unlike
-        /// <see cref="OnDefeated"/>'s own "every rig built so far hears it" caveat (shared across every
+        /// <see cref="OnKilled"/>'s own "every rig built so far hears it" caveat (shared across every
         /// boss kind), this signal has no identity to mismatch.</summary>
         private void OnShieldBlocked(Vector3 pos) => _shieldFlashRemaining = ShieldRingFlashSeconds;
 
@@ -261,6 +263,7 @@ namespace MaxWorlds.VFX
                         var lens = CharacterPart.AddLens(transform, CharacterMeshes.Bevelled(new Vector3(0.22f, 0.22f, 0.04f), 0.03f),
                             pos, Quaternion.LookRotation(faceNormal, Vector3.up), Vector3.one);
                         lens.gameObject.name = "RackLight";
+                        _rackLights.Add(lens);
                         ApplyLensColor(lens, (lightIndex % 3 == 0) ? AccentRed : RackWhite);
                         lightIndex++;
                     }
@@ -591,11 +594,12 @@ namespace MaxWorlds.VFX
         /// <summary>Everything this rig does once a frame, with an explicit <paramref name="dt"/> —
         /// pulled out of <see cref="LateUpdate"/> so a test can drive it at a controlled rate, same
         /// shape as every other boss rig's own <c>Tick</c>.</summary>
-        private void Tick(float dt)
+        public void Tick(float dt)
         {
             if (_dying)
             {
                 if (_floorGridRoot != null) _floorGridRoot.gameObject.SetActive(false);
+                TickDeath(dt);
                 return;
             }
 
@@ -678,14 +682,60 @@ namespace MaxWorlds.VFX
             r.SetPropertyBlock(_mpb);
         }
 
-        private void OnDefeated()
+        /// <summary>MV-1471: starts THIS rig's own death the instant its own boss dies, on the shared
+        /// MV-1190 <see cref="BossDeathSequence"/> every other boss plays. <see cref="HudSignals.BossKilled"/>
+        /// is scene-wide, so the boss's own <c>IsDead</c> is the identity guard (MV-625).</summary>
+        private void OnKilled(Vector3 diedAt)
         {
-            // Same MV-625 guard every other boss rig's own OnDefeated uses: HudSignals.BossDefeated
-            // carries no identity, and every rig built so far hears it.
-            if (_boss == null || !_boss.IsDead) return;
+            if (_boss == null || !_boss.IsDead || _dying) return;
             _dying = true;
-            gameObject.SetActive(false);
-            if (_floorGridRoot != null) Destroy(_floorGridRoot.gameObject);
+            if (_floorGridRoot != null) _floorGridRoot.gameObject.SetActive(false);
+
+            FindFirstObjectByType<BossSpectacle>()?.ThroesShake();
+            _deathSeq = new BossDeathSequence(transform.position, WorldBoundsNow(),
+                onBlast: (pos, scale, kind) => FindFirstObjectByType<BossSpectacle>()?.Blast(pos, scale),
+                onFinale: centre =>
+                {
+                    BossDeathFinaleVfx.SpawnChunks(centre, new[] { WhiteCeramic, BlackGlass, AccentRed });
+                    BossDeathFinaleVfx.Flash();
+                });
+        }
+
+        private Bounds WorldBoundsNow()
+        {
+            var renderers = GetComponentsInChildren<MeshRenderer>();
+            if (renderers.Length == 0) return new Bounds(transform.position, Vector3.one);
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            return b;
+        }
+
+        private const float StrobeStartHz = 4f, StrobeEndHz = 16f;
+        private const float DarkStart = 0.3f, DarkEnd = BossDeathSequence.FinaleTime - 0.1f;
+
+        /// <summary>The shared sequence owns the transform (X/Z jitter, Y pinned). GRIDLOCK's own touch:
+        /// her red rack lights strobe faster and faster, then go dark one by one before the finale blast.</summary>
+        private void TickDeath(float dt)
+        {
+            if (_deathSeq == null) return;
+            transform.position = _deathSeq.Tick(dt);
+
+            float t = _deathSeq.Elapsed;
+            float hz = Mathf.Lerp(StrobeStartHz, StrobeEndHz, Mathf.Clamp01(t / BossDeathSequence.FinaleTime));
+            bool phaseOn = ((int)(t * hz * 2f) % 2) == 0;
+            int n = _rackLights.Count;
+            for (int i = 0; i < n; i++)
+            {
+                float goesDarkAt = Mathf.Lerp(DarkStart, DarkEnd, n > 1 ? i / (float)(n - 1) : 0f);
+                bool lit = t < goesDarkAt && phaseOn;
+                ApplyLensColor(_rackLights[i], lit ? ((i % 3 == 0) ? AccentRed : RackWhite) : Color.black);
+            }
+
+            if (_deathSeq.Done)
+            {
+                gameObject.SetActive(false);
+                _boss.HideBody();
+            }
         }
 
         private void OnDestroy()
