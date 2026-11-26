@@ -99,6 +99,9 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.GreaterOrEqual(reach, length - 0.05f, $"{wallName} must reach the Reef hatch end ({reach:0.00} of {length})");
             }
 
+            _playerGo.GetComponent<CharacterController>().enabled = false;   // Max's own capsule is not corridor
+            Physics.SyncTransforms();
+
             // --- no void: a lit collider under every 1 m grid point, 8 m either side ---
             for (float along = 0f; along <= length + 0.001f; along += 1f)
                 for (float side = -8f; side <= 8.001f; side += 1f)
@@ -107,7 +110,7 @@ namespace MaxWorlds.Tests.EditMode
                     Assert.IsTrue(Physics.Raycast(p, Vector3.down, out RaycastHit hit, 60f, ~0, QueryTriggerInteraction.Collide),
                         $"void at along {along}, side {side}");
                     var rend = hit.collider.GetComponent<Renderer>();
-                    Assert.IsTrue(rend != null && rend.enabled, $"unlit collider at along {along}, side {side}");
+                    Assert.IsTrue(rend != null && rend.enabled, $"unlit collider at along {along}, side {side}: hit {hit.collider.name} under {hit.collider.transform.parent?.name}");
                 }
 
             // --- light: amber -> neutral -> teal, no step ---

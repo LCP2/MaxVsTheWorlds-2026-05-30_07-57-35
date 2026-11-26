@@ -746,7 +746,9 @@ namespace MaxWorlds.Arena
                     arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
                 // MV-1176 "Do not": plain shells into the Reef for now; the Market Street dressing ticket
                 // sets ExitDressing. MV-1178 sets ArrivalDressing below -- the climb corridor ticket.
-                ExitDressing = ExitCorridorDressingKind.None,
+                // MV-1470: the City -> Reef corridor is one continuous themed run (station street, tiled
+                // underpass, harbour gantry to the hull hatch).
+                ExitDressing = ExitCorridorDressingKind.ExitReef,
                 ArrivalDressing = ArrivalDressingKind.ArrivalCity,
                 RunsLegacyExitGate = false,
                 DevStart = DevStartLoadout.PreviousWorldExitRig,

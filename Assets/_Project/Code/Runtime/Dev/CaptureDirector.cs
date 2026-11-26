@@ -708,6 +708,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1429MarksmanBolter());
             Add(BuildMv1435MarksmanWheels());
             Add(BuildMv1448RocketCrate());
+            Add(BuildMv1470CityReefCorridor());
             Add(BuildMv1436A5TopDown());
             return d;
         }
@@ -2849,6 +2850,110 @@ namespace MaxWorlds.Dev
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1436-a5-top-down", NoSetup) },
                 ExtraReport = () => found + "\n",
+            };
+        }
+
+        /// <summary>MV-1470 AC2: three shots of the City -> Reef exit corridor from the play camera, one
+        /// per section (d = 5, 15, 25 m), saved under Logs/ with each shot's median luminance written to
+        /// <c>Logs/MV-1470-luminance.txt</c>. Run via <c>cc-mv1470-capture.bat</c>.</summary>
+        private static CapturePreset BuildMv1470CityReefCorridor()
+        {
+            string outDir = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs"));
+            float[] shotD = { 5f, 15f, 25f };
+            string[] names = { "MV-1470-1-station-street", "MV-1470-2-underpass", "MV-1470-3-harbour-gantry" };
+            var report = new System.Text.StringBuilder();
+            Vector2 doorMouth = default;
+            Wall wall = Wall.E;
+            Vector3 Out(Wall w) => w switch { Wall.N => Vector3.forward, Wall.S => Vector3.back, Wall.E => Vector3.right, _ => Vector3.left };
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Cfg == null || path.Map == null)
+                    throw new CaptureAbortException("the City built no BackyardPath to open the corridor from");
+                int city = WorldCatalog.IndexOf(WorldIds.City);
+                WorldTransitionEntry entry = WorldCatalog.Get(city).Entry;
+                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, city, path.ExitGate);
+                for (int i = 0; i < 4; i++) yield return null;
+                if (FindFirstObjectByType<WorldJoinSequence>() == null)
+                    throw new CaptureAbortException("WorldJoinSequence failed to build the City exit corridor");
+                doorMouth = entry.ExitDoorMouth(path.Cfg);
+                wall = entry.ExitWall;
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // WorldJoinSequence re-teleports Max to d=1 the instant he first crosses the door
+                // (MV-1123 BeginCorridorWalk), so cross it once here; later placements then stick.
+                var p0 = FindFirstObjectByType<PlayerController>();
+                if (p0 == null) throw new CaptureAbortException("no Max in the scene");
+                var cc0 = p0.GetComponent<CharacterController>();
+                if (cc0 != null) cc0.enabled = false;
+                p0.transform.position = new Vector3(doorMouth.x, p0.transform.position.y, doorMouth.y) + Out(wall) * 2f;
+                if (cc0 != null) cc0.enabled = true;
+                for (int i = 0; i < 4; i++) yield return null;
+            }
+
+            Func<Camera, IEnumerator> Setup(int idx)
+            {
+                IEnumerator Run(Camera cam)
+                {
+                    var player = FindFirstObjectByType<PlayerController>();
+                    if (player == null) throw new CaptureAbortException("no Max in the scene");
+                    var cc = player.GetComponent<CharacterController>();
+                    Vector3 at = new Vector3(doorMouth.x, player.transform.position.y, doorMouth.y) + Out(wall) * shotD[idx];
+                    if (cc != null) cc.enabled = false;
+                    player.transform.position = at;
+                    if (cc != null) cc.enabled = true;
+                    // WorldJoinSequence.Update drives the lighting from Max's position; the capture
+                    // camera is placed with the production rig's own pitch and distance.
+                    for (int i = 0; i < 4; i++) yield return null;
+                    var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                    float pitch = rig != null ? rig.Pitch : 60f;
+                    float distance = rig != null ? rig.Distance : 20f;
+                    var rot = Quaternion.Euler(pitch, 0f, 0f);
+                    cam.transform.SetPositionAndRotation(new Vector3(at.x, 1f, at.z) - rot * Vector3.forward * distance, rot);
+                    CaptureDirector.WarmUpRender(cam);
+                    for (int i = 0; i < 3; i++) yield return null;
+                }
+                return Run;
+            }
+
+            Action<Texture2D> Measure(int idx) => tex =>
+            {
+                var px = tex.GetPixels32();
+                var lum = new byte[px.Length];
+                for (int i = 0; i < px.Length; i++)
+                    lum[i] = (byte)Mathf.Clamp(Mathf.RoundToInt(0.2126f * px[i].r + 0.7152f * px[i].g + 0.0722f * px[i].b), 0, 255);
+                Array.Sort(lum);
+                report.AppendLine($"{names[idx]} d={shotD[idx]}m median luminance = {lum[lum.Length / 2]}/255");
+                System.IO.File.WriteAllText(System.IO.Path.Combine(outDir, "MV-1470-luminance.txt"), report.ToString());
+            };
+
+            var shots = new List<CaptureShot>();
+            for (int i = 0; i < 3; i++) shots.Add(new CaptureShot(names[i], Setup(i), null, Measure(i)));
+
+            return new CapturePreset
+            {
+                Key = "mv1470citreefcorridor",
+                LogTag = "[MV1470Capture]",
+                Flag = "-mv1470shot",
+                ArmFile = "Temp/mv1470.arm",
+                HeadlessMarker = "Temp/mv1470.headless",
+                DoneFileName = "_mv1470_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = shots,
             };
         }
 
