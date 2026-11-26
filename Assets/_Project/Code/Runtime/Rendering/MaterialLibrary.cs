@@ -430,7 +430,7 @@ namespace MaxWorlds.Rendering
                 // asphalt would catch a highlight that reads as a puddle, not a road — and 10%
                 // contrast per the ticket's own number.
                 case SurfaceKind.Asphalt:
-                    return new SurfaceProfile(0.25f, 0.7f, 0.08f, 0.12f);
+                    return new SurfaceProfile(0.25f, 0.7f, 0.08f, 0.42f);   // MV-1472: dark tone, so a wide swing is what makes the grain read
 
                 // MV-1205: the City's pavement. 1.0 x 0.6 m slabs at a 6 m tile (DetailScale = 1/6 m)
                 // — see StylizedTextures.PavingSlabHeight for the cell maths — a little more sheen

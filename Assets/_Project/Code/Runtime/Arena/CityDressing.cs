@@ -52,8 +52,18 @@ namespace MaxWorlds.Arena
 
             DressGround(host);
 
-            WorldArea a1 = cfg.Area("a1");
-            if (a1 != null) DressSurfaces(root, a1);
+            // MV-1472: every City area's authored road paint is built, not just a1's. This used to
+            // dress only a1 (cfg.Area("a1")), so a2..a30's authored pavement, centre lines, zebras and
+            // bays existed in city_config.json and never reached the world - the real reason the street
+            // read as a plain floor. DressStreet then supplies what an area's authored data does not
+            // (lane paint, kerbs, lamps, drains, manholes, a zebra in every third area).
+            if (cfg.areas != null)
+                foreach (WorldArea area in cfg.areas)
+                {
+                    if (area == null || area.id == "stub") continue;
+                    DressSurfaces(root, area);
+                    DressStreet(root, area);
+                }
 
             DressWalls(root, host, map, cfg);
             DressDoorFrames(root, host);
@@ -90,7 +100,7 @@ namespace MaxWorlds.Arena
         {
             if (area.surfaces == null || area.surfaces.Length == 0) return;
 
-            var surfaceHost = new GameObject("Surfaces").transform;
+            var surfaceHost = new GameObject(area.id == "a1" ? "Surfaces" : $"Surfaces {area.id}").transform;
             surfaceHost.SetParent(root, false);
 
             foreach (WorldSurface s in area.surfaces)
@@ -120,6 +130,157 @@ namespace MaxWorlds.Arena
                         Debug.LogWarning($"[CityDressing] area '{area.id}': unknown surface kind '{s.kind}' (id '{s.id}') skipped.");
                         break;
                 }
+            }
+        }
+
+        // ---------------------------------------------------------------- (a2) street supplement (MV-1472)
+
+        private const float PavementDepth = 2.2f;
+        private const float LampPitch = 11f;      // "about every 10-12 m"
+        private const float LampInset = 0.9f;     // lamp foot, in from the area's long wall
+
+        private static bool Has(WorldArea area, string kind)
+        {
+            if (area.surfaces == null) return false;
+            foreach (WorldSurface s in area.surfaces) if (s != null && s.kind == kind) return true;
+            return false;
+        }
+
+        /// <summary>MV-1472: the per-area street layer. Road runs along the area's long axis; kerbs and
+        /// pavement strips hug the two long walls; lamps stand on the kerb every ~11 m; lane dashes and a
+        /// double yellow centre line run down the road; every third area gets a zebra and stop line; drains
+        /// sit at the kerb and a manhole and worn arrow in the lane. Anything the area's own authored
+        /// <see cref="WorldArea.surfaces"/> already carry (pavement, centreline, zebra, drain, manhole) is
+        /// left to that data and not doubled. All paint is generated meshes (two draw calls per area).</summary>
+        private static void DressStreet(Transform root, WorldArea area)
+        {
+            Rect r = area.Footprint;
+            if (r.width < 8f || r.height < 8f) return;
+
+            var street = new GameObject($"Street {area.id}").transform;
+            street.SetParent(root, false);
+
+            bool alongX = r.width >= r.height;
+            float L0 = alongX ? r.xMin : r.yMin, L1 = alongX ? r.xMax : r.yMax;
+            float C0 = alongX ? r.yMin : r.xMin, C1 = alongX ? r.yMax : r.xMax;
+            float L = L1 - L0, C = C1 - C0, Cm = (C0 + C1) * 0.5f;
+
+            Vector2 P(float l, float c) => alongX ? new Vector2(l, c) : new Vector2(c, l);
+            Vector2 RoadDir() => alongX ? Vector2.right : Vector2.up;
+            Vector2 CrossDir() => alongX ? Vector2.up : Vector2.right;
+
+            // ---- pavement + kerb on both long walls (unless authored)
+            if (!Has(area, "pavement"))
+            {
+                foreach (int side in new[] { -1, 1 })
+                {
+                    float cEdge = side < 0 ? C0 : C1 - PavementDepth;
+                    Vector2 a = P(L0, cEdge), b = P(L1, cEdge + PavementDepth);
+                    CityKit.BuildPavement(street, new Rect(Mathf.Min(a.x, b.x), Mathf.Min(a.y, b.y),
+                        Mathf.Abs(b.x - a.x), Mathf.Abs(b.y - a.y)));
+                    float cKerb = side < 0 ? C0 + PavementDepth : C1 - PavementDepth;
+                    if (!Has(area, "kerb")) CityKit.BuildKerbLine(street, P(L0, cKerb), P(L1, cKerb));
+                }
+            }
+
+            // ---- lamps on both kerbs, staggered, every ~11 m
+            int perSide = Mathf.Max(1, Mathf.FloorToInt((L - 4f) / LampPitch) + 1);
+            float pitch = perSide > 1 ? (L - 6f) / (perSide - 1) : 0f;
+            foreach (int side in new[] { -1, 1 })
+            {
+                float cFoot = side < 0 ? C0 + LampInset : C1 - LampInset;
+                Vector2 armXz = alongX ? new Vector2(0f, -side) : new Vector2(-side, 0f);   // arm reaches into the road
+                for (int i = 0; i < perSide; i++)
+                {
+                    float l = perSide == 1 ? (L0 + L1) * 0.5f : L0 + 3f + i * pitch + (side > 0 ? pitch * 0.5f : 0f);
+                    l = Mathf.Clamp(l, L0 + 2f, L1 - 2f);
+                    Vector2 foot = P(l, cFoot);
+                    CityKit.BuildStreetLamp(street, new Vector3(foot.x, 0f, foot.y), new Vector3(armXz.x, 0f, armXz.y));
+                }
+            }
+
+            // ---- wide areas (a plaza, a roundabout): two inner rows so the open floor is lit too
+            if (C >= 28f)
+            {
+                foreach (int side in new[] { -1, 1 })
+                {
+                    Vector2 armXz = alongX ? new Vector2(0f, -side) : new Vector2(-side, 0f);
+                    for (int i = 0; i < perSide; i++)
+                    {
+                        float l = perSide == 1 ? (L0 + L1) * 0.5f : L0 + 3f + i * pitch + (side > 0 ? 0f : pitch * 0.5f);
+                        l = Mathf.Clamp(l, L0 + 2f, L1 - 2f);
+                        Vector2 foot = P(l, Cm + side * C * 0.22f);
+                        CityKit.BuildStreetLamp(street, new Vector3(foot.x, 0f, foot.y), new Vector3(armXz.x, 0f, armXz.y));
+                    }
+                }
+            }
+
+            // ---- lane paint (one generated mesh per colour)
+            var white = new CityKit.PaintBatch();
+            var yellow = new CityKit.PaintBatch();
+            float lane = (C - 2f * PavementDepth) * 0.25f;
+            float roadLo = C0 + PavementDepth + 0.6f, roadHi = C1 - PavementDepth - 0.6f;
+            foreach (int side in new[] { -1, 1 })
+            {
+                Vector2 a = P(L0 + 1.5f, Cm + side * lane), b = P(L1 - 1.5f, Cm + side * lane);
+                white.Dashes(a, b, 2.4f, 3.6f, 0.15f);
+            }
+            if (!Has(area, "centreline"))
+            {
+                foreach (float off in new[] { -0.11f, 0.11f })
+                {
+                    Vector2 a = P(L0 + 2.5f, Cm + off), b = P(L1 - 2.5f, Cm + off);
+                    Vector2 d = b - a;
+                    yellow.Quad((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f, d.magnitude, 0.1f, d);
+                }
+            }
+
+            // worn arrow in the lane (shaft + two head bars)
+            {
+                Vector2 c = P(L0 + L * 0.78f, Cm - lane * 0.5f);
+                Vector2 d = RoadDir();
+                white.Quad(c.x, c.y, 1.7f, 0.17f, d);
+                Vector2 tip = c + d * 0.85f;
+                foreach (float sign in new[] { -1f, 1f })
+                {
+                    Vector2 hd = (Vector2)(Quaternion.Euler(0f, 0f, sign * 35f) * new Vector3(-d.x, -d.y, 0f));
+                    Vector2 hc = tip + hd * 0.3f;
+                    white.Quad(hc.x, hc.y, 0.6f, 0.17f, hd);
+                }
+            }
+
+            // zebra + stop line in every third area that has no authored zebra
+            if (area.index % 3 == 0 && !Has(area, "zebra"))
+            {
+                float lz = L0 + L * 0.35f;
+                for (float c = roadLo + 0.45f; c <= roadHi - 0.2f; c += 0.95f)
+                {
+                    Vector2 p = P(lz, c);
+                    white.Quad(p.x, p.y, 3.6f, 0.5f, RoadDir());
+                }
+                Vector2 stop = P(lz - 2.5f, (roadLo + Cm) * 0.5f);
+                white.Quad(stop.x, stop.y, 0.4f, (Cm - roadLo) - 0.4f, CrossDir());
+            }
+
+            white.Build(street, "Lane Paint White", CityKit.PaintWhite);
+            yellow.Build(street, "Lane Paint Yellow", CityKit.PaintYellow);
+
+            // ---- drains at the kerb, manhole in the lane (unless authored)
+            if (!Has(area, "drain"))
+            {
+                foreach (float f in new[] { 0.25f, 0.68f })
+                {
+                    int side = f < 0.5f ? -1 : 1;
+                    float c = side < 0 ? C0 + PavementDepth + 0.3f : C1 - PavementDepth - 0.3f;
+                    Vector2 p = P(L0 + L * f, c);
+                    Vector2 size = alongX ? new Vector2(1.4f, 0.4f) : new Vector2(0.4f, 1.4f);
+                    CityKit.BuildDrainGrate(street, new Rect(p.x - size.x * 0.5f, p.y - size.y * 0.5f, size.x, size.y));
+                }
+            }
+            if (!Has(area, "manhole"))
+            {
+                Vector2 p = P(L0 + L * 0.5f, Cm + lane * 0.5f);
+                CityKit.BuildManhole(street, new Vector3(p.x, 0f, p.y));
             }
         }
 

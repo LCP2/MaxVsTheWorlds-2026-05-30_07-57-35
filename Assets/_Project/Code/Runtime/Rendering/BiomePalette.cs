@@ -342,9 +342,10 @@ namespace MaxWorlds.Rendering
             // uniform RGB scale does exactly that — see BackyardLook.City's own note). GroundAccent/
             // GroundDry and every reserved state colour are deliberately left alone (ticket's own
             // scope).
-            GroundBase = new Color(0.204f, 0.220f, 0.282f) * 1.15f,
-            GroundAccent = new Color(0.235f, 0.250f, 0.310f),
-            GroundDry = new Color(0.180f, 0.190f, 0.240f),
+            // MV-1472: ground neutral-warm, no blue/violet cast (the road itself is CityKit.Asphalt).
+            GroundBase = new Color(0.330f, 0.306f, 0.285f),
+            GroundAccent = new Color(0.310f, 0.290f, 0.270f),
+            GroundDry = new Color(0.240f, 0.225f, 0.210f),
             Wall = new Color(0.50f, 0.44f, 0.46f) * 1.15f,
             Prop = new Color(0.36f, 0.39f, 0.48f) * 1.15f,
 

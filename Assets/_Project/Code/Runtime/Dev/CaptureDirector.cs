@@ -709,6 +709,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1435MarksmanWheels());
             Add(BuildMv1448RocketCrate());
             Add(BuildMv1470CityReefCorridor());
+            Add(BuildMv1472CityStreetLook());
             Add(BuildMv1436A5TopDown());
             return d;
         }
@@ -2945,6 +2946,85 @@ namespace MaxWorlds.Dev
                 Height = 1000,
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = shots,
+            };
+        }
+
+        /// <summary>MV-1472 AC2: City a2 and a15 from the production camera and look (HUD hidden), saved under
+        /// <c>Logs/</c>, each measured for median luminance, median B minus R and the share of amber pixels
+        /// (R &gt; B + 40 and R &gt; 90), written to <c>Logs/MV-1472-metrics.txt</c>. Run via
+        /// <c>cc-mv1472-capture.bat</c>. Same production-camera route as <see cref="BuildMv1249MothershipLookCheck"/>.</summary>
+        private static CapturePreset BuildMv1472CityStreetLook()
+        {
+            string outDir = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs"));
+            string[] areas = { "a2", "a15" };
+            var report = new System.Text.StringBuilder();
+
+            IEnumerator FrameArea(string area)
+            {
+                if (!DevModeController.TryJumpToArea(area))
+                    throw new CaptureAbortException($"DevModeController.TryJumpToArea(\"{area}\") found no map/player to jump");
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                yield return FrameArea(areas[0]);
+            }
+
+            Action<Texture2D> Measure(string area) => tex =>
+            {
+                Color32[] px = tex.GetPixels32();
+                var lum = new byte[px.Length];
+                var bMinusR = new short[px.Length];
+                int amber = 0;
+                for (int i = 0; i < px.Length; i++)
+                {
+                    Color32 c = px[i];
+                    lum[i] = (byte)Mathf.Clamp(Mathf.RoundToInt(0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b), 0, 255);
+                    bMinusR[i] = (short)(c.b - c.r);
+                    if (c.r > c.b + 40 && c.r > 90) amber++;
+                }
+                Array.Sort(lum);
+                Array.Sort(bMinusR);
+                report.AppendLine($"{area}: median luminance={lum[lum.Length / 2]}/255 median B-R={bMinusR[bMinusR.Length / 2]} " +
+                                  $"amber={100f * amber / px.Length:F1}%");
+                System.IO.File.WriteAllText(System.IO.Path.Combine(outDir, "MV-1472-metrics.txt"), report.ToString());
+            };
+
+            var shots = new List<CaptureShot>();
+            for (int i = 0; i < areas.Length; i++)
+            {
+                string area = areas[i];
+                Func<Camera, IEnumerator> setup = i == 0 ? NoSetup : (cam => FrameArea(area));
+                shots.Add(new CaptureShot($"MV-1472-{area}", setup, null, Measure(area)));
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1472citystreetlook",
+                LogTag = "[MV1472Capture]",
+                Flag = "-mv1472shot",
+                ArmFile = "Temp/mv1472.arm",
+                HeadlessMarker = "Temp/mv1472.headless",
+                DoneFileName = "_mv1472_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,   // the live production camera, never a manual pose
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 150,
                 BeforeSceneLoad = () =>
                 {
                     SaveSlotData data = SaveSystem.Load(0);
