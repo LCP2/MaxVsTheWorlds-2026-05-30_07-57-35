@@ -164,6 +164,7 @@ namespace MaxWorlds.Audio
             HudSignals.DomeBlocked += OnDomeBlocked;           // MV-1380
             HudSignals.CanisterDetonated += OnCanisterDetonated; // MV-1421
             HudSignals.ArcStrikeLanded += OnArcStrikeLanded;     // MV-1426
+            HudSignals.PartsCacheUnsealed += OnPartsCacheUnsealed; // MV-1478
         }
 
         private void OnDisable()
@@ -195,6 +196,7 @@ namespace MaxWorlds.Audio
             HudSignals.DomeBlocked -= OnDomeBlocked;
             HudSignals.CanisterDetonated -= OnCanisterDetonated;
             HudSignals.ArcStrikeLanded -= OnArcStrikeLanded;
+            HudSignals.PartsCacheUnsealed -= OnPartsCacheUnsealed;
         }
 
         private void Update()
@@ -237,6 +239,7 @@ namespace MaxWorlds.Audio
         private void OnDomeBlocked(Vector3 pos) => PlayCue(Cue.ShieldBlocked, pos);                  // MV-1380
         private void OnCanisterDetonated(Vector3 pos) => PlayCue(Cue.CanisterExplosion, pos);   // MV-1421
         private void OnArcStrikeLanded(Vector3 pos) => PlayCue(Cue.ArcStrikeCrack, pos);   // MV-1426
+        private void OnPartsCacheUnsealed(Vector3 pos) => PlayCue(Cue.CacheUnsealed, pos);   // MV-1478
         private void OnAnyButtonClicked() => PlayCueHere(Cue.UiClick);
 
         // --- playback ---

@@ -63,6 +63,10 @@ namespace MaxWorlds.Arena
         /// <summary>A Rocket Crate's footprint, metres (MV-1448) — the clearance box a placement checks.</summary>
         public const float RocketCrateFootprint = 0.8f;
 
+        /// <summary>MV-1478: a Parts Cache pod - ~1.6 m across, ~1.4 m tall.</summary>
+        public const float PartsCacheFootprint = 1.6f;
+        public const float PartsCacheHeight = 1.4f;
+
         /// <summary>An airlock panel's built width, in metres (MV-1305 ticket: "a 3 m-wide hull
         /// door").</summary>
         public const float AirlockWidth = 3f;
@@ -751,6 +755,37 @@ namespace MaxWorlds.Arena
                         width = RocketCrateFootprint,
                         height = RocketCrateFootprint,
                         depth = RocketCrateFootprint,
+                    });
+                }
+            }
+
+            // MV-1478: an area's Parts Caches - per-entity, id defaulted like a rocket crate's.
+            int cacheWorldIndex = -1;
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldPartsCache[] caches = a.partsCaches ?? Array.Empty<WorldPartsCache>();
+                if (caches.Length > 0 && cacheWorldIndex < 0)
+                {
+                    for (int wi = 0; wi < WorldCatalog.Count && cacheWorldIndex < 0; wi++)
+                    {
+                        WorldConfig rowCfg = WorldLibrary.Load(WorldCatalog.Get(wi).ConfigKey);
+                        if (rowCfg != null && rowCfg.world == cfg.world) cacheWorldIndex = wi;
+                    }
+                }
+                for (int i = 0; i < caches.Length; i++)
+                {
+                    WorldPartsCache c = caches[i];
+                    if (c == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(c.id) ? $"{a.id}_partscache{i + 1}" : c.id,
+                        kind = "partscache",
+                        worldIndex = cacheWorldIndex,
+                        x = c.x,
+                        z = c.z,
+                        width = PartsCacheFootprint,
+                        height = PartsCacheHeight,
+                        depth = PartsCacheFootprint,
                     });
                 }
             }

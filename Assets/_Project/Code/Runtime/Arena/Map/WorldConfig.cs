@@ -703,6 +703,17 @@ namespace MaxWorlds.Arena
         public float z;
     }
 
+    /// <summary>A Parts Cache (MV-1478) - a sealed pod that holds the area's Parts in a world with
+    /// <see cref="WorldDefinition.UsesPartsCaches"/>. Same shape and absolute-world-metres convention as
+    /// <see cref="WorldRocketCrate"/>; one per area with a garrison.</summary>
+    [Serializable]
+    public sealed class WorldPartsCache
+    {
+        public string id;
+        public float x;
+        public float z;
+    }
+
     /// <summary>A Mothership airlock panel (MV-1305) — rule AIRLOCKS (Lee, 27 Oct 2026). Another
     /// PLAYER-triggered hazard, same footing as <see cref="WorldCanister"/>: any player-side hit while
     /// READY blows it, and the resulting pull is explicitly licensed to remove robots too
@@ -830,6 +841,10 @@ namespace MaxWorlds.Arena
 
         /// <summary>Rocket Crates authored into this area (MV-1448). Optional; none authored yet.</summary>
         public WorldRocketCrate[] rocketCrates = Array.Empty<WorldRocketCrate>();
+
+        /// <summary>Parts Caches authored into this area (MV-1478). Optional; only the worlds with
+        /// <see cref="WorldDefinition.UsesPartsCaches"/> author any.</summary>
+        public WorldPartsCache[] partsCaches = Array.Empty<WorldPartsCache>();
 
         /// <summary>Airlock panels authored into this area (MV-1305). Optional; no config authors any
         /// yet — placement is a separate ticket (MV-1310).</summary>

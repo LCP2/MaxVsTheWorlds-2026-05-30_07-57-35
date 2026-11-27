@@ -60,6 +60,10 @@ namespace MaxWorlds.UI
         /// machines hold it" per the design image.</summary>
         public static readonly Color PylonDot = new Color32(0x8C, 0x10, 0x10, 0xFF);
 
+        /// <summary>MV-1478: an UNSEALED Parts Cache's map marker - cyan, like its light column in the world.</summary>
+        public static readonly Color CacheDot = new Color32(0x33, 0xE6, 0xFF, 0xFF);
+        public const float CacheDotSize = 1.6f;
+
         /// <summary>World metres. An objective marker's footprint on the map (MV-830, broadened by
         /// MV-1119 to every still-alive shed/hutch/reactor/Replicator/boss) — matches a Replicator's
         /// 2 x 2 m body.</summary>

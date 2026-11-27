@@ -377,6 +377,15 @@
             "dir": "Ambience"
         },
         {
+            "id": "CacheUnsealed",
+            "prompt": "a sealed energy vault unlocking, glassy shield shattering then a bright rising bell chime, short and rewarding",
+            "durationSeconds": 0.9,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3,
+            "source": "file"
+        },
+        {
             "id": "RigHum",
             "prompt": "seamless loop, low warm electrical hum of current through an old resistor, very slow gentle pulsing (about one swell every 3 seconds), faint crackle, workshop-quiet, no melody, no sudden sounds",
             "durationSeconds": 24.0,

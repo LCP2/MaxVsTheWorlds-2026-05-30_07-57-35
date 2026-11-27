@@ -247,8 +247,9 @@ namespace MaxWorlds.Tests.EditMode
                         "x 1.26 (the Robot-health multiplier), at Invasion level 0 (toughness x1)");
                 }
 
-                // AC4: killing five garrison-placed Dredge Hulks through the real TakeDamage entry point,
-                // from a player-team source, must leave at least 10 part pickups live in the world.
+                // AC4 (MV-1478: superseded) - the Reef is a Parts Cache world now, so its robots drop NO Parts: what MV-1106's
+                // guaranteed 2/kill used to pay is held in the area's cache instead. Killing five garrison-placed Dredge Hulks
+                // through the real TakeDamage entry point, from a player-team source, must leave no part pickup live.
                 foreach (RobotEnemy hulk in dredgeHulks)
                 {
                     hulk.TakeDamage(new DamageInfo(expectedHealth + 50f, hulk.transform.position,
@@ -259,9 +260,8 @@ namespace MaxWorlds.Tests.EditMode
                 foreach (Pickup p in Object.FindObjectsByType<Pickup>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
                     if (p.Kind == PickupKind.PowerCell) liveParts++;
 
-                Assert.That(liveParts, Is.GreaterThanOrEqualTo(10),
-                    $"killing 5 garrison-placed Dredge Hulks must leave at least 10 part pickups live " +
-                    $"(MV-1106's guaranteed 2/kill alone accounts for 10) — got {liveParts}");
+                Assert.That(liveParts, Is.EqualTo(0),
+                    $"killing 5 garrison-placed Dredge Hulks in a Parts Cache world must drop no part pickups - got {liveParts}");
             }
             finally
             {

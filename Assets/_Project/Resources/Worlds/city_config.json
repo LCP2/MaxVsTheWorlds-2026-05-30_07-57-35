@@ -615,6 +615,13 @@
   {
    "id": "a1",
    "index": 1,
+   "partsCaches": [
+    {
+     "id": "a1_partscache1",
+     "x": 12.75,
+     "z": 19.25
+    }
+   ],
    "name": "Market Street",
    "role": "normal",
    "origin": {
@@ -1240,6 +1247,13 @@
   {
    "id": "a2",
    "index": 2,
+   "partsCaches": [
+    {
+     "id": "a2_partscache1",
+     "x": 19.25,
+     "z": 58.25
+    }
+   ],
    "name": "Bus Station Approach",
    "role": "replicator",
    "origin": {
@@ -1635,6 +1649,13 @@
   {
    "id": "a3",
    "index": 3,
+   "partsCaches": [
+    {
+     "id": "a3_partscache1",
+     "x": 60.25,
+     "z": 49.75
+    }
+   ],
    "name": "Laundry Lane",
    "role": "replicator",
    "origin": {
@@ -2009,6 +2030,13 @@
   {
    "id": "a4",
    "index": 4,
+   "partsCaches": [
+    {
+     "id": "a4_partscache1",
+     "x": 53.75,
+     "z": 70.25
+    }
+   ],
    "name": "Pigeon Square",
    "role": "replicator",
    "origin": {
@@ -2397,6 +2425,13 @@
   {
    "id": "a5",
    "index": 5,
+   "partsCaches": [
+    {
+     "id": "a5_partscache1",
+     "x": 9.85,
+     "z": 80.3
+    }
+   ],
    "name": "Back Alleys",
    "role": "replicator",
    "origin": {
@@ -2784,6 +2819,13 @@
   {
    "id": "a6",
    "index": 6,
+   "partsCaches": [
+    {
+     "id": "a6_partscache1",
+     "x": 22.25,
+     "z": 116.95
+    }
+   ],
    "name": "Arcade Row",
    "role": "replicator",
    "origin": {
@@ -3303,6 +3345,13 @@
   {
    "id": "a7",
    "index": 7,
+   "partsCaches": [
+    {
+     "id": "a7_partscache1",
+     "x": 57.0,
+     "z": 110.75
+    }
+   ],
    "name": "Taxi Rank",
    "role": "replicator",
    "origin": {
@@ -3858,6 +3907,13 @@
   {
    "id": "a8",
    "index": 8,
+   "partsCaches": [
+    {
+     "id": "a8_partscache1",
+     "x": 71.25,
+     "z": 152.75
+    }
+   ],
    "name": "Multistorey Car Park",
    "role": "replicator",
    "origin": {
@@ -4552,6 +4608,13 @@
   {
    "id": "a9",
    "index": 9,
+   "partsCaches": [
+    {
+     "id": "a9_partscache1",
+     "x": 103.5,
+     "z": 138.75
+    }
+   ],
    "name": "Loading Bays",
    "role": "replicator",
    "origin": {
@@ -4936,6 +4999,13 @@
   {
    "id": "a10",
    "index": 10,
+   "partsCaches": [
+    {
+     "id": "a10_partscache1",
+     "x": 101.25,
+     "z": 171.25
+    }
+   ],
    "name": "Cinema Steps",
    "role": "replicator",
    "origin": {
@@ -5397,6 +5467,13 @@
   {
    "id": "a11",
    "index": 11,
+   "partsCaches": [
+    {
+     "id": "a11_partscache1",
+     "x": 72.35,
+     "z": 184.05
+    }
+   ],
    "name": "Service Road",
    "role": "replicator",
    "origin": {
@@ -6968,6 +7045,13 @@
   {
    "id": "a12",
    "index": 12,
+   "partsCaches": [
+    {
+     "id": "a12_partscache1",
+     "x": 69.5,
+     "z": 214.95
+    }
+   ],
    "name": "Flower Market",
    "role": "replicator",
    "origin": {
@@ -7505,6 +7589,13 @@
   {
    "id": "a13",
    "index": 13,
+   "partsCaches": [
+    {
+     "id": "a13_partscache1",
+     "x": 99.25,
+     "z": 214.5
+    }
+   ],
    "name": "Five Ways",
    "role": "replicator",
    "origin": {
@@ -8175,6 +8266,13 @@
   {
    "id": "a14",
    "index": 14,
+   "partsCaches": [
+    {
+     "id": "a14_partscache1",
+     "x": 106.0,
+     "z": 251.25
+    }
+   ],
    "name": "Tram Stop",
    "role": "replicator",
    "origin": {
@@ -8538,6 +8636,13 @@
   {
    "id": "a15",
    "index": 15,
+   "partsCaches": [
+    {
+     "id": "a15_partscache1",
+     "x": 143.5,
+     "z": 242.5
+    }
+   ],
    "name": "The Roundabout",
    "role": "replicator",
    "origin": {
@@ -9356,6 +9461,13 @@
   {
    "id": "a16",
    "index": 16,
+   "partsCaches": [
+    {
+     "id": "a16_partscache1",
+     "x": 138.0,
+     "z": 308.0
+    }
+   ],
    "name": "Scaffold Yard",
    "role": "replicator",
    "origin": {
@@ -9737,6 +9849,13 @@
   {
    "id": "a17",
    "index": 17,
+   "partsCaches": [
+    {
+     "id": "a17_partscache1",
+     "x": 108.85,
+     "z": 299.05
+    }
+   ],
    "name": "Courier Depot",
    "role": "replicator",
    "origin": {
@@ -11260,6 +11379,13 @@
   {
    "id": "a18",
    "index": 18,
+   "partsCaches": [
+    {
+     "id": "a18_partscache1",
+     "x": 99.25,
+     "z": 333.2
+    }
+   ],
    "name": "Library Gardens",
    "role": "replicator",
    "origin": {
@@ -11727,6 +11853,13 @@
   {
    "id": "a19",
    "index": 19,
+   "partsCaches": [
+    {
+     "id": "a19_partscache1",
+     "x": 122.75,
+     "z": 321.55
+    }
+   ],
    "name": "Bin Store Alley",
    "role": "replicator",
    "origin": {
@@ -12983,6 +13116,13 @@
   {
    "id": "a20",
    "index": 20,
+   "partsCaches": [
+    {
+     "id": "a20_partscache1",
+     "x": 132.75,
+     "z": 375.45
+    }
+   ],
    "name": "High Street",
    "role": "replicator",
    "origin": {
@@ -13415,6 +13555,13 @@
   {
    "id": "a21",
    "index": 21,
+   "partsCaches": [
+    {
+     "id": "a21_partscache1",
+     "x": 170.75,
+     "z": 361.5
+    }
+   ],
    "name": "Pawn Shop Corner",
    "role": "replicator",
    "origin": {
@@ -13919,6 +14066,13 @@
   {
    "id": "a22",
    "index": 22,
+   "partsCaches": [
+    {
+     "id": "a22_partscache1",
+     "x": 175.25,
+     "z": 415.25
+    }
+   ],
    "name": "Night Market",
    "role": "replicator",
    "origin": {
@@ -14890,6 +15044,13 @@
   {
    "id": "a23",
    "index": 23,
+   "partsCaches": [
+    {
+     "id": "a23_partscache1",
+     "x": 210.75,
+     "z": 400.75
+    }
+   ],
    "name": "Underpass Ramp",
    "role": "replicator",
    "origin": {
@@ -15254,6 +15415,13 @@
   {
    "id": "a24",
    "index": 24,
+   "partsCaches": [
+    {
+     "id": "a24_partscache1",
+     "x": 199.75,
+     "z": 422.5
+    }
+   ],
    "name": "Builders Merchant",
    "role": "replicator",
    "origin": {
@@ -15698,6 +15866,13 @@
   {
    "id": "a25",
    "index": 25,
+   "partsCaches": [
+    {
+     "id": "a25_partscache1",
+     "x": 173.85,
+     "z": 442.05
+    }
+   ],
    "name": "Ticket Office Lane",
    "role": "replicator",
    "origin": {
@@ -17102,6 +17277,13 @@
   {
    "id": "a26",
    "index": 26,
+   "partsCaches": [
+    {
+     "id": "a26_partscache1",
+     "x": 178.75,
+     "z": 462.45
+    }
+   ],
    "name": "Bike Hire Plaza",
    "role": "replicator",
    "origin": {
@@ -17582,6 +17764,13 @@
   {
    "id": "a27",
    "index": 27,
+   "partsCaches": [
+    {
+     "id": "a27_partscache1",
+     "x": 221.25,
+     "z": 471.25
+    }
+   ],
    "name": "Parcel Sorting Yard",
    "role": "replicator",
    "origin": {
@@ -18101,6 +18290,13 @@
   {
    "id": "a28",
    "index": 28,
+   "partsCaches": [
+    {
+     "id": "a28_partscache1",
+     "x": 219.25,
+     "z": 497.0
+    }
+   ],
    "name": "Station Road",
    "role": "replicator",
    "origin": {
@@ -18569,6 +18765,13 @@
   {
    "id": "a29",
    "index": 29,
+   "partsCaches": [
+    {
+     "id": "a29_partscache1",
+     "x": 253.25,
+     "z": 501.25
+    }
+   ],
    "name": "Concourse Gates",
    "role": "replicator",
    "origin": {
@@ -19172,6 +19375,13 @@
   {
    "id": "a30",
    "index": 30,
+   "partsCaches": [
+    {
+     "id": "a30_partscache1",
+     "x": 258.75,
+     "z": 539.75
+    }
+   ],
    "name": "Station Forecourt",
    "role": "boss+exit",
    "origin": {

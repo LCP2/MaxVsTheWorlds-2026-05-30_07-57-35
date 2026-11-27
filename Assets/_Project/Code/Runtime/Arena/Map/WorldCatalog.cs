@@ -315,6 +315,15 @@ namespace MaxWorlds.Arena
         /// 1 rocket per Part dropped (<see cref="MaxWorlds.Pickups.CellEconomyTuning.DefaultPowerCellDropRatio"/>),
         /// so every world but the City reproduces its current behaviour exactly.</summary>
         public float RocketsPerLargeKill = -1f;
+
+        /// <summary>MV-1478 (Lee, 27 Nov: "after World 2, Parts should have locations"): true = robots in this world
+        /// drop NO Parts; each area's Parts sit in a sealed Parts Cache (<see cref="MaxWorlds.Factories.PartsCache"/>)
+        /// that opens once the area's own robots are dead. Worlds 3-5 only. Read through this flag, never a world number.</summary>
+        public bool UsesPartsCaches;
+
+        /// <summary>MV-1478: a Parts Cache's HP in this world - the ONE tuning constant per world. Authored so about 2.5 s of
+        /// sustained fire from the world's typical primary at mid-world POWER (roughly 70-90 damage a second) opens it.</summary>
+        public float PartsCacheHealth;
     }
 
     /// <summary>The one table of worlds (MV-1141) — introduced so a fourth world (the City) can be
@@ -761,6 +770,8 @@ namespace MaxWorlds.Arena
                 // so the world's total Parts max every RIG node by a30 (WorldEconomyModel / MV1455WorldEconomyTests).
                 PartsPerLargeKill = CellEconomyTuning.DefaultCityPartsPerLargeKill,
                 RocketsPerLargeKill = CellEconomyTuning.DefaultCityRocketsPerLargeKill,
+                UsesPartsCaches = true,   // MV-1478
+                PartsCacheHealth = 190f,
             },
             new WorldDefinition
             {
@@ -800,6 +811,8 @@ namespace MaxWorlds.Arena
                 // set so the world's Parts max every RIG node by a30 (MV1462ReefEconomyTests).
                 PartsPerLargeKill = CellEconomyTuning.DefaultReefPartsPerLargeKill,
                 RocketsPerLargeKill = CellEconomyTuning.DefaultReefRocketsPerLargeKill,
+                UsesPartsCaches = true,   // MV-1478 (placement: MV-1479)
+                PartsCacheHealth = 230f,
                 RackModuleDropsHere = false,
                 // MV-1155: untouched — stays at BossTuning.VolleyInterval's own default.
                 BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
@@ -834,6 +847,8 @@ namespace MaxWorlds.Arena
                 // MV-1225: World 5, the Mothership -- the fifth and last world (Lee, 17 Oct 2026). Ships
                 // as a one-area placeholder; the real 30-area Hangar Bay layout is MV-1232.
                 Id = WorldIds.Mothership,
+                UsesPartsCaches = true,   // MV-1478 (placement: MV-1479)
+                PartsCacheHealth = 270f,
                 ConfigKey = WorldLibrary.Mothership,
                 // MV-1230: Kit switches to the Mothership's own ship kit.
                 // MV-1237: Music gets its own row -- no longer reuses the Reef's.

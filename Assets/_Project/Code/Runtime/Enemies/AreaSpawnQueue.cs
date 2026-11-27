@@ -61,6 +61,14 @@ namespace MaxWorlds.Enemies
         public int ActiveCountForArea(int areaIndex) =>
             _activeByArea.TryGetValue(areaIndex, out int count) ? count : 0;
 
+        /// <summary>MV-1478: robots still waiting for a slot that belong to <paramref name="areaIndex"/>.</summary>
+        public int QueuedForArea(int areaIndex)
+        {
+            int n = 0;
+            foreach (QueuedSpawn q in _queued) if (q.Area == areaIndex) n++;
+            return n;
+        }
+
         /// <summary>Robots still waiting for a slot under <see cref="MaxActive"/>.</summary>
         public int QueuedCount => _queued.Count;
 

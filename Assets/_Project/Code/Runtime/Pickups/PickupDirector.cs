@@ -219,13 +219,16 @@ namespace MaxWorlds.Pickups
 
             _largeKills++;
 
+            // MV-1478: in a Parts Cache world the roll below is still taken (the rocket rate can be linked to it) but no
+            // robot drops any Parts - the area's cache holds them instead.
+            bool cachesWorld = WorldCatalog.Get(ResolvePlayedWorldIndex()).UsesPartsCaches;
             int cells = ResolveCellDrop();
             // MV-1228: "as a Brute, doubled" — the ticket's own drop rule, applied to the roll before
             // it's spawned rather than as a second guaranteed ring (unlike the Dredge Hulk/Dreadnought
             // bonuses below, which are a FIXED top-up on top of the ordinary roll); a Breaker's own kill
             // just drops twice as many Power Cells as the same roll would for any other large kind.
             if (kind == EnemyKind.Breaker) cells *= 2;
-            for (int i = 0; i < cells; i++)
+            for (int i = 0; i < cells && !cachesWorld; i++)
             {
                 float ang = i * (Mathf.PI * 2f / cells);
                 Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
@@ -240,7 +243,7 @@ namespace MaxWorlds.Pickups
             // fix to a broken path. MV-1219: keyed on the Reef's stable WorldIds entry, not a raw
             // worldIndex >= 2 comparison — MV-1176 inserted the City at index 2 and moved the Reef to
             // index 3, so that comparison also matched every City Brute.
-            if (kind == EnemyKind.Brute && WorldCatalog.Get(ResolvePlayedWorldIndex()).Id == WorldIds.Reef)
+            if (!cachesWorld && kind == EnemyKind.Brute && WorldCatalog.Get(ResolvePlayedWorldIndex()).Id == WorldIds.Reef)
             {
                 for (int i = 0; i < DredgeHulkGuaranteedPartDrops; i++)
                 {
@@ -255,7 +258,7 @@ namespace MaxWorlds.Pickups
             // area it was garrisoned in — kept separate from the Dredge Hulk's ring above (offset
             // further out) so the two guaranteed rings never land on top of each other on the rare kill
             // that somehow satisfied both kind checks.
-            if (kind == EnemyKind.Dreadnought)
+            if (kind == EnemyKind.Dreadnought && !cachesWorld)
             {
                 for (int i = 0; i < DreadnoughtGuaranteedPowerCellDrops; i++)
                 {
@@ -500,6 +503,34 @@ namespace MaxWorlds.Pickups
         /// <see cref="MaxWorlds.Factories.Vault.Id"/> it opens, what <see cref="Collect"/> reads to bind
         /// <see cref="MaxWorlds.Factories.VaultKeyState"/>'s held key to that vault.</summary>
         public Pickup PlaceVaultKeyAt(Vector3 pos, string vaultId) => SpawnDrop(PickupKind.VaultKey, pos, vaultId: vaultId);
+
+        /// <summary>MV-1478: the pickups of a Parts Cache burst that fly to Max from anywhere (the existing Magneto pull, with no
+        /// radius) until collected.</summary>
+        private readonly HashSet<Pickup> _burstPulled = new HashSet<Pickup>();
+
+        /// <summary>MV-1478: spills <paramref name="parts"/> Parts around <paramref name="pos"/> as one Supercell per
+        /// <see cref="PickupWallet.SupercellCellValue"/> Parts plus a Power Cell for each one left over, so the pickups'
+        /// banked value is exactly <paramref name="parts"/>. Every pickup flies to Max and never expires. Returns what it created.</summary>
+        public List<Pickup> SpawnCacheBurst(Vector3 pos, int parts)
+        {
+            var created = new List<Pickup>();
+            if (parts <= 0) return created;
+            int supercells = parts / PickupWallet.SupercellCellValue;
+            int cells = parts - supercells * PickupWallet.SupercellCellValue;
+            int total = supercells + cells;
+            for (int i = 0; i < total; i++)
+            {
+                float ang = i * (Mathf.PI * 2f / total) + 0.3f;
+                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (ScatterRadius * (0.6f + 0.4f * (i % 2)));
+                Pickup drop = i < supercells
+                    ? SpawnDrop(PickupKind.Supercell, pos + off, DecorativeKind())
+                    : SpawnDrop(PickupKind.PowerCell, pos + off);
+                if (drop == null) continue;
+                _burstPulled.Add(drop);
+                created.Add(drop);
+            }
+            return created;
+        }
 
         /// <summary>MV-1448: places an authored Rocket Crate at <paramref name="pos"/> - unless this run has
         /// already collected it (<see cref="RocketCrateCensus"/>), in which case nothing is placed and null
@@ -847,7 +878,8 @@ namespace MaxWorlds.Pickups
                     // regardless of which physical strip). Checked BEFORE every step, so a pull that fails
                     // this frame simply never advances past wherever it already validly sat -- there is no
                     // separate "snap back" state to write.
-                    if (sameLevel && (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2))
+                    if (sameLevel && (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2)
+                                      || _burstPulled.Contains(p))
                         && MagnetoPathClear(map, pPos, m))
                     {
                         _pullingThisTick.Add(p);   // MV-1101 item 5: pauses this pickup's ground lifetime below
@@ -1036,6 +1068,7 @@ namespace MaxWorlds.Pickups
             }
 
             _reserveFullTold.Remove(p);
+            _burstPulled.Remove(p);   // MV-1478
             // MV-1038: same pool-return unregistration as RetireCell — see that call's own comment.
             MapStaticBatchRoot.Active?.Unregister(p.GetComponentsInChildren<Renderer>(true));
             p.gameObject.SetActive(false);

@@ -81,7 +81,6 @@ namespace MaxWorlds.Pickups
             m.PartsByArea = new float[areaCount + 1];
 
             float supercell = PickupWallet.SupercellCellValue;
-            float multiplier = row.PartsMultiplier != null ? row.PartsMultiplier() : 1f;
             int lockedCategories = LockedCategoriesAtWorldStart(worldIndex);
             int factoryOrdinal = 0, cradleOrdinal = 0;
 
@@ -93,14 +92,10 @@ namespace MaxWorlds.Pickups
                 int large = comp.LargeCount;
                 m.LargeKills += large;
 
-                // --- kills ---
-                float perKill = row.PartsPerLargeKill > 0f
-                    ? row.PartsPerLargeKill
-                    : (large > 0 ? CellEconomyTuning.CellsForArea(n) * multiplier / large : 0f);
-                float kills = large * perKill + comp.Breaker * perKill;   // a Breaker kill pays its roll twice
-                kills += comp.Dreadnought * 4f;
-                if (row.Id == WorldIds.Reef) kills += comp.Brute * 2f;
-                Add(m, n, "kills", kills);
+                // --- kills (MV-1478: in a Parts Cache world the same amount is paid by the area's cache instead) ---
+                float kills = KillPartsFor(row, comp, n);
+                if (row.UsesPartsCaches) Add(m, n, "caches", Mathf.RoundToInt(kills));
+                else Add(m, n, "kills", kills);
 
                 // --- per-area Supercell budget (one, shared) ---
                 bool budgetClaimed = false;
@@ -150,6 +145,34 @@ namespace MaxWorlds.Pickups
 
             m.FullUpgradeCost = FullUpgradeCostFor(worldIndex);
             return m;
+        }
+
+        /// <summary>The Parts an area's large kills are worth in this world (expected value): the flat per-kill rate or the
+        /// per-area budget, Breaker kills double, Dreadnought +4, a Reef Brute +2. In a <see cref="WorldDefinition.UsesPartsCaches"/>
+        /// world this is the amount the area's Parts Cache holds (MV-1478).</summary>
+        private static float KillPartsFor(WorldDefinition row, DifficultyEngine.Composition comp, int n)
+        {
+            int large = comp.LargeCount;
+            float multiplier = row.PartsMultiplier != null ? row.PartsMultiplier() : 1f;
+            float perKill = row.PartsPerLargeKill > 0f
+                ? row.PartsPerLargeKill
+                : (large > 0 ? CellEconomyTuning.CellsForArea(n) * multiplier / large : 0f);
+            float kills = large * perKill + comp.Breaker * perKill;   // a Breaker kill pays its roll twice
+            kills += comp.Dreadnought * 4f;
+            if (row.Id == WorldIds.Reef) kills += comp.Brute * 2f;
+            return kills;
+        }
+
+        /// <summary>MV-1478: the whole-number Parts the Parts Cache of 1-based <paramref name="areaIndex"/> bursts in
+        /// <paramref name="worldIndex"/> - exactly the "caches" figure <see cref="Compute"/> books for that area. 0 in a
+        /// world that does not use caches.</summary>
+        public static int CachePartsForArea(int worldIndex, int areaIndex)
+        {
+            WorldDefinition row = WorldCatalog.Get(worldIndex);
+            if (!row.UsesPartsCaches) return 0;
+            WorldConfig cfg = WorldLibrary.Load(row.ConfigKey);
+            if (cfg == null || cfg.AreaByIndex(areaIndex) == null) return 0;
+            return Mathf.RoundToInt(KillPartsFor(row, cfg.SolveComposition(areaIndex), areaIndex));
         }
 
         private static void Add(WorldEconomyModel m, int area, string source, float parts)
