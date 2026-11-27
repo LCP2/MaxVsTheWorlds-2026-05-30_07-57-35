@@ -46,11 +46,29 @@ namespace MaxWorlds.Weapons
         public const float RocketHitsPerSecond = 1.0f;
         public const float OrbitalHitsPerSecond = 2.0f;
 
+        // MV-1480: a hit HOLDS the robot; the push is only a token nudge on top.
+        /// <summary>Seconds a robot stays held after the latest player-weapon hit.</summary>
+        public const float HoldSeconds = 0.3f;
+        /// <summary>Max sustained-fire displacement per second at POWER 1 (m); ticket cap 0.15, set under so 2 s of simulated fire (discrete ticks, 21 hits) stays inside 0.3 m.</summary>
+        public const float PushPerSecondPower1 = 0.12f;
+        /// <summary>Max sustained-fire displacement per second at max POWER (m).</summary>
+        public const float PushPerSecondMaxPower = 0.20f;
+        public const int MaxPowerLevel = 5;
+        /// <summary>Most a single rocket blast moves a robot (m).</summary>
+        public const float RocketMaxPush = 0.4f;
+
+        /// <summary>Displacement per second of sustained fire for a POWER level (m), linear 0.15 -> 0.25.</summary>
+        public static float PushPerSecond(int powerLevel)
+        {
+            float t = Mathf.Clamp01((Mathf.Max(1, powerLevel) - 1) / (float)(MaxPowerLevel - 1));
+            return Mathf.Lerp(PushPerSecondPower1, PushPerSecondMaxPower, t);
+        }
+
         public static float PowerMultiplier(int powerLevel) => 1f + PowerStep * (Mathf.Max(1, powerLevel) - 1);
 
         /// <summary>Displacement (m) a single hit should move a reference robot.</summary>
         public static float DisplacementPerHit(float refHitsPerSecond, int powerLevel, float scale = 1f) =>
-            BaseDisplacementPerSecond / Mathf.Max(0.01f, refHitsPerSecond) * PowerMultiplier(powerLevel) * scale;
+            Mathf.Min(PushPerSecond(powerLevel) / Mathf.Max(0.01f, refHitsPerSecond) * scale, RocketMaxPush);
 
         /// <summary>Impulse (m/s) that moves a reference robot <paramref name="displacement"/> metres.</summary>
         public static float ImpulseFor(float displacement) =>
@@ -67,7 +85,7 @@ namespace MaxWorlds.Weapons
             float impulse = ImpulseFor(DisplacementPerHit(refHitsPerSecond, CurrentPowerLevel, scale));
             if (impulse <= 0f) return;
             Vector3 v = direction.normalized * impulse;
-            if (target is RobotEnemy robot) robot.ApplyPush(v);
+            if (target is RobotEnemy robot) robot.ApplyWeaponHit(v);
             else if (target is IKnockbackable kb) kb.ApplyKnockback(v);
         }
 
