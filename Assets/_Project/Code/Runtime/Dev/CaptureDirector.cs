@@ -713,6 +713,7 @@ namespace MaxWorlds.Dev
             Add(BuildCityReefCorridorPreset("MV-1473", "mv1473cityreefv2", "-mv1473shot", new[] { 0.15f, 0.50f, 0.85f },
                 new[] { "MV-1473-1-street-15pct", "MV-1473-2-quay-50pct", "MV-1473-3-gantry-85pct" }));
             Add(BuildMv1472CityStreetLook());
+            Add(BuildMv1483CityMood());
             Add(BuildMv1436A5TopDown());
             return d;
         }
@@ -3034,6 +3035,162 @@ namespace MaxWorlds.Dev
                 DisableBrain = false,   // the live production camera, never a manual pose
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 150,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = shots,
+            };
+        }
+
+        /// <summary>MV-1483 AC2: City a2, a15 and a Pylon outside every lamp pool, from the production camera and look
+        /// (HUD hidden). Per frame: median luminance, unlit tarmac (darkest 40%) median luminance and |R-B|, amber share
+        /// (R &gt; B + 40 and R &gt; 90) with its median luminance; for the pylon shot, the median B-R of the pylon's
+        /// on-screen body. Written to <c>Logs/MV-1483-metrics.txt</c>. Run via <c>cc-mv1483-capture.bat</c>.</summary>
+        private static CapturePreset BuildMv1483CityMood()
+        {
+            string outDir = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs"));
+            string[] areas = { "a2", "a15" };
+            var report = new System.Text.StringBuilder();
+            Rect pylonRect = Rect.zero;
+            string pylonInfo = "";
+
+            IEnumerator FrameArea(string area)
+            {
+                if (!DevModeController.TryJumpToArea(area))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(" + area + ") found no map/player to jump");
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                yield return FrameArea(areas[0]);
+            }
+
+            IEnumerator FramePylon(Camera cam)
+            {
+                // The Pylon farthest from every lamp pool: its body is lit by the moon/ambient only.
+                var pools = new List<Renderer>();
+                foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+                    if (r != null && r.name == "Pool") pools.Add(r);
+                Pylon best = null; float bestD = -1f;
+                foreach (var p in FindObjectsByType<Pylon>(FindObjectsSortMode.None))
+                {
+                    if (p == null) continue;
+                    float d = float.MaxValue;
+                    foreach (var r in pools)
+                    {
+                        Vector3 c = r.bounds.center; c.y = p.transform.position.y;
+                        d = Mathf.Min(d, Vector3.Distance(c, p.transform.position) - r.bounds.extents.x);
+                    }
+                    if (d > bestD) { bestD = d; best = p; }
+                }
+                if (best == null) throw new CaptureAbortException("no Pylon found in the City");
+                GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+                if (playerObj == null) throw new CaptureAbortException("no Player");
+                var cc = playerObj.GetComponent<CharacterController>();
+                bool was = cc != null && cc.enabled;
+                if (cc != null) cc.enabled = false;
+                playerObj.transform.position = best.transform.position + new Vector3(2.5f, 0f, -1.0f);
+                if (cc != null) cc.enabled = was;
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+
+                Bounds b = default; bool has = false;
+                foreach (var r in best.GetComponentsInChildren<Renderer>())
+                {
+                    if (r == null || !r.enabled) continue;
+                    if (!has) { b = r.bounds; has = true; } else b.Encapsulate(r.bounds);
+                }
+                Vector3 mn = cam.WorldToScreenPoint(new Vector3(b.min.x, b.min.y, b.min.z));
+                Vector3 mx = cam.WorldToScreenPoint(new Vector3(b.max.x, b.max.y, b.max.z));
+                Vector3 m2 = cam.WorldToScreenPoint(new Vector3(b.min.x, b.max.y, b.max.z));
+                Vector3 m3 = cam.WorldToScreenPoint(new Vector3(b.max.x, b.min.y, b.min.z));
+                float x0 = Mathf.Min(Mathf.Min(mn.x, mx.x), Mathf.Min(m2.x, m3.x)), x1 = Mathf.Max(Mathf.Max(mn.x, mx.x), Mathf.Max(m2.x, m3.x));
+                float y0 = Mathf.Min(Mathf.Min(mn.y, mx.y), Mathf.Min(m2.y, m3.y)), y1 = Mathf.Max(Mathf.Max(mn.y, mx.y), Mathf.Max(m2.y, m3.y));
+                float sx = 1f / Mathf.Max(1, cam.pixelWidth), sy = 1f / Mathf.Max(1, cam.pixelHeight);
+                pylonRect = new Rect(x0 * sx, y0 * sy, (x1 - x0) * sx, (y1 - y0) * sy);   // normalised
+                pylonInfo = "pylon '" + best.name + "' at " + best.transform.position + ", " + bestD.ToString("F1") + " m outside the nearest pool";
+            }
+
+            Action<Texture2D> Measure(string name, bool pylon) => tex =>
+            {
+                Color32[] px = tex.GetPixels32();
+                int n = px.Length;
+                var lum = new byte[n];
+                for (int i = 0; i < n; i++)
+                {
+                    Color32 c = px[i];
+                    lum[i] = (byte)Mathf.Clamp(Mathf.RoundToInt(0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b), 0, 255);
+                }
+                var order = new int[n];
+                for (int i = 0; i < n; i++) order[i] = i;
+                Array.Sort(order, (a, b) => lum[a].CompareTo(lum[b]));
+                int dark = (int)(n * 0.4f);
+                var dr = new byte[dark]; var db = new byte[dark]; var dl = new byte[dark];
+                for (int i = 0; i < dark; i++) { dr[i] = px[order[i]].r; db[i] = px[order[i]].b; dl[i] = lum[order[i]]; }
+                Array.Sort(dr); Array.Sort(db);
+                var amberLum = new List<byte>();
+                for (int i = 0; i < n; i++)
+                {
+                    Color32 c = px[i];
+                    if (c.r > c.b + 40 && c.r > 90) amberLum.Add(lum[i]);
+                }
+                amberLum.Sort();
+                string line = name + ": median luminance=" + lum[order[n / 2]] + "/255; unlit tarmac (darkest 40%): median lum=" + dl[dark / 2] +
+                              " median R=" + dr[dark / 2] + " median B=" + db[dark / 2] + " |R-B|=" + Mathf.Abs(dr[dark / 2] - db[dark / 2]) +
+                              "; amber=" + (100f * amberLum.Count / n).ToString("F1") + "% amber median lum=" + (amberLum.Count > 0 ? amberLum[amberLum.Count / 2] : 0);
+                if (pylon)
+                {
+                    int x0 = Mathf.Clamp(Mathf.RoundToInt(pylonRect.xMin * tex.width), 0, tex.width - 1);
+                    int x1 = Mathf.Clamp(Mathf.RoundToInt(pylonRect.xMax * tex.width), x0 + 1, tex.width);
+                    int y0 = Mathf.Clamp(Mathf.RoundToInt(pylonRect.yMin * tex.height), 0, tex.height - 1);
+                    int y1 = Mathf.Clamp(Mathf.RoundToInt(pylonRect.yMax * tex.height), y0 + 1, tex.height);
+                    var bmr = new List<int>(); var rs = new List<int>(); var gs = new List<int>(); var bs = new List<int>();
+                    for (int y = y0; y < y1; y++)
+                    for (int x = x0; x < x1; x++)
+                    {
+                        Color32 c = px[y * tex.width + x];
+                        bmr.Add(c.b - c.r); rs.Add(c.r); gs.Add(c.g); bs.Add(c.b);
+                    }
+                    bmr.Sort(); rs.Sort(); gs.Sort(); bs.Sort();
+                    int m = bmr.Count / 2;
+                    line += "; " + pylonInfo + "; pylon box px=[" + x0 + "," + y0 + ".." + x1 + "," + y1 + "] median RGB=(" + rs[m] + "," + gs[m] + "," + bs[m] + ") median B-R=" + bmr[m];
+                }
+                report.AppendLine(line);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(outDir, "MV-1483-metrics.txt"), report.ToString());
+            };
+
+            var shots = new List<CaptureShot>();
+            for (int i = 0; i < areas.Length; i++)
+            {
+                string area = areas[i];
+                Func<Camera, IEnumerator> setup = i == 0 ? NoSetup : (cam => FrameArea(area));
+                shots.Add(new CaptureShot("MV-1483-" + area, setup, null, Measure(area, false)));
+            }
+            shots.Add(new CaptureShot("MV-1483-pylon", FramePylon, null, Measure("pylon", true)));
+
+            return new CapturePreset
+            {
+                Key = "mv1483citymood",
+                LogTag = "[MV1483Capture]",
+                Flag = "-mv1483shot",
+                ArmFile = "Temp/mv1483.arm",
+                HeadlessMarker = "Temp/mv1483.headless",
+                DoneFileName = "_mv1483_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 200,
                 BeforeSceneLoad = () =>
                 {
                     SaveSlotData data = SaveSystem.Load(0);
