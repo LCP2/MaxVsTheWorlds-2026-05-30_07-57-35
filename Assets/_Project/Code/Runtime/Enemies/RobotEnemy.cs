@@ -77,6 +77,7 @@ namespace MaxWorlds.Enemies
         /// </summary>
         public float EffectiveMoveSpeed =>
             moveSpeed * DevTuning.Or(DevTuning.RobotMoveSpeedMultiplier, 1f) *
+            (IsHitHeld ? 0f : 1f) *   // MV-1480: a weapon hit stops walking/chasing dead
             // MV-705: a Sludge Drone is immune to sludge slow — its own map-authored puddles AND its
             // own death puddle (SludgePuddle) both flow through MapSlowZones, so exempting it here
             // covers both at once rather than needing a separate check per source.
@@ -2088,6 +2089,7 @@ namespace MaxWorlds.Enemies
             _zoneRouteBudget.Reset();  // ...nor its cached in-room ZoneRouteGrid step (MV-611)
             _routeEpoch = EnemyNavigation.RouteEpoch;
             _knockback = Vector3.zero;
+            _hitHoldTimer = 0f;   // MV-1480
             _haltTimer = 0f;
             _stunTimer = 0f;
             _stunDamageMultiplier = 1f;
@@ -2392,6 +2394,7 @@ namespace MaxWorlds.Enemies
         public void Tick(float dt)
         {
             if (Current == State.Dead) return;
+            TickHitHold(dt);   // MV-1480
 
             // MV-1081: a cutscene holds this robot frozen — no tick at all, state and timers exactly
             // as they were, regardless of what state it's frozen in (Dormant, Submerged, Chase...).
@@ -2629,6 +2632,24 @@ namespace MaxWorlds.Enemies
             // MV-1228: the Breaker refuses it the same way — "knockback refused on the Breaker itself".
             if (Kind == EnemyKind.Dreadnought || Kind == EnemyKind.Breaker) return;
             _knockback += impulse;
+        }
+
+        private float _hitHoldTimer;
+        private void TickHitHold(float dt) { if (_hitHoldTimer > 0f) _hitHoldTimer = Mathf.Max(0f, _hitHoldTimer - dt); }
+
+        /// <summary>MV-1480: true while a player-weapon hit has this robot held in place (no walking, no
+        /// chasing, no new melee lunge/charge). It can still turn, aim and fire.</summary>
+        public bool IsHitHeld => _hitHoldTimer > 0f;
+
+        /// <summary>MV-1480: a player-weapon hit. Starts/refreshes the <see cref="WeaponPush.HoldSeconds"/>
+        /// hold (not on a Dreadnought/Breaker, and not mid-Lunge - a committed lunge/charge/ram carries on)
+        /// and applies the tiny push through <see cref="ApplyPush"/>'s resistances.</summary>
+        public void ApplyWeaponHit(Vector3 pushImpulse)
+        {
+            if (Current == State.Dead) return;
+            if (Kind != EnemyKind.Dreadnought && Kind != EnemyKind.Breaker && Current != State.Lunge)
+                _hitHoldTimer = WeaponPush.HoldSeconds;
+            ApplyPush(pushImpulse);
         }
 
         /// <summary>MV-1476: a weapon push. Same resistances as <see cref="ApplyKnockback(Vector3)"/>
@@ -3701,6 +3722,10 @@ namespace MaxWorlds.Enemies
             // kind, since it's the only one this rule was ever authored for.
             if (Kind == EnemyKind.Charger && MapSlowZones.Instance.SpeedMultiplierAt(transform.position) < 1f)
                 return;
+
+            // MV-1480: a hit-held robot may not START a melee lunge/charge/ram until the hold ends.
+            if (IsHitHeld && (Kind == EnemyKind.Rusher || Kind == EnemyKind.Blinker
+                || Kind == EnemyKind.Charger || Kind == EnemyKind.Breaker)) return;
 
             // MV-1228: the Breaker picks one of its two attacks by range, chosen here rather than
             // falling into the generic single-attack gate below. Punch (close, <= 2.2 m) and ram

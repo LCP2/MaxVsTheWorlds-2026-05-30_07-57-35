@@ -494,9 +494,11 @@ namespace MaxWorlds.Combat
                     // displacement goes with its square).
                     if (push.sqrMagnitude > 1e-4f && sprayKnockback > 0f)
                     {
-                        Vector3 v = push.normalized * sprayKnockback
-                            * Mathf.Sqrt(WeaponPush.PowerMultiplier(WeaponPush.CurrentPowerLevel));
-                        if (comp is RobotEnemy robot) robot.ApplyPush(v); else kb.ApplyKnockback(v);
+                        // MV-1480: robots take the shared hold + tiny push (hose = WeaponPush.HoseHitsPerSecond);
+                        // other knockbackables keep the old spray shove.
+                        if (comp is RobotEnemy robot) WeaponPush.Apply(robot, push, WeaponPush.HoseHitsPerSecond);
+                        else kb.ApplyKnockback(push.normalized * sprayKnockback
+                            * Mathf.Sqrt(WeaponPush.PowerMultiplier(WeaponPush.CurrentPowerLevel)));
                     }
                 }
 
