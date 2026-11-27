@@ -101,7 +101,7 @@
   },
   {
    "kind": "bolter",
-   "moveSpeed": 3.5,
+   "speedR": 1,
    "marksman": true,
    "maxHealth": 80
   },

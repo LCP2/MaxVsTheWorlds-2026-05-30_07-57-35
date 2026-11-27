@@ -31,7 +31,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(BlasterTuning.EnergyPerSecond, Is.EqualTo(12.16f).Within(0.001f), "water deplete (MV-319: +15%)");
             Assert.That(BlasterTuning.RegenPerSec, Is.EqualTo(55f).Within(0.001f), "water replenish — unchanged");
-            Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(0.93f).Within(0.001f), "robot speed (MV-658)");
+            // MV-1475: robot speeds are now tiered (Rusher 1.7 R); the tier ratios are guarded by MV1475RobotSpeedTiersTests.
             Assert.That(BossTuning.MoveSpeed, Is.EqualTo(0.9f).Within(0.001f), "boss speed — quartered (MV-410)");
         }
 
@@ -82,9 +82,10 @@ namespace MaxWorlds.Tests.EditMode
         {
             // YT-66's fridge-on-legs: the tank is deliberately half-speed. Baking the rusher's new
             // number must not quietly make the bruiser as fast as it.
+            // MV-1475: the half-speed tank is now measured against the MEDIUM (ranged) tier.
             Assert.That(EnemyArchetype.Bruiser.MoveSpeed,
-                        Is.EqualTo(EnemyArchetype.Rusher.MoveSpeed * 0.5f).Within(0.02f),
-                        "the bruiser should stay ~half the rusher's speed");
+                        Is.EqualTo(EnemyArchetype.Gunner.MoveSpeed * 0.5f).Within(0.02f),
+                        "the bruiser should stay ~half the medium tier's speed");
         }
 
         [Test]

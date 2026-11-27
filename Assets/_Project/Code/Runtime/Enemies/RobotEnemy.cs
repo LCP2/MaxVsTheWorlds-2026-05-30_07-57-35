@@ -76,7 +76,7 @@ namespace MaxWorlds.Enemies
         /// live speed (world overrides included) instead of the base archetype table.
         /// </summary>
         public float EffectiveMoveSpeed =>
-            DevTuning.Or(DevTuning.RobotMoveSpeed, moveSpeed) *
+            moveSpeed * DevTuning.Or(DevTuning.RobotMoveSpeedMultiplier, 1f) *
             // MV-705: a Sludge Drone is immune to sludge slow — its own map-authored puddles AND its
             // own death puddle (SludgePuddle) both flow through MapSlowZones, so exempting it here
             // covers both at once rather than needing a separate check per source.

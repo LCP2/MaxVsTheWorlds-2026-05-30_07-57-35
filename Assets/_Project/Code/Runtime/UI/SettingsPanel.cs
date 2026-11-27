@@ -288,7 +288,6 @@ namespace MaxWorlds.UI
             float pitchDefault = rig != null ? rig.Pitch : 72f;
             float playerDefault = player != null ? player.AuthoredMoveSpeed : 6f;
             float healthDefault = health != null ? health.AuthoredMax : 100f;
-            float robotDefault = EnemyArchetype.Rusher.MoveSpeed;
             float bossDefault = BossTuning.MoveSpeed;
 
             // ---- FEEL tab: camera + Max's own handling + the spray's cosmetic knockback. ----
@@ -544,9 +543,9 @@ namespace MaxWorlds.UI
                 v => DevTuning.BossVolleyWindup = v, tab: TabArena);
 
             // ---- ENEMIES tab: robots and the boss (an enemy). ----
-            Add("Robot move speed", "m/s", 0.5f, 12f, robotDefault,
-                () => DevTuning.Or(DevTuning.RobotMoveSpeed, robotDefault),
-                v => DevTuning.RobotMoveSpeed = v, tab: TabEnemies);
+            Add("Robot move speed", "x", 0.5f, 2f, 1f,   // MV-1475: a multiplier on every kind's own speed
+                () => DevTuning.Or(DevTuning.RobotMoveSpeedMultiplier, 1f),
+                v => DevTuning.RobotMoveSpeedMultiplier = v, tab: TabEnemies);
 
             Add("Robot health", "x", 0.5f, 3f, EnemySpawner.DefaultRobotHealthMultiplier,
                 () => DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier),
