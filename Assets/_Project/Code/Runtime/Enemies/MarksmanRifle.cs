@@ -18,8 +18,8 @@ namespace MaxWorlds.Enemies
         public const float LockSeconds = 0.1f;
         public const float CooldownSeconds = 2.5f;
         public const float AimLineWidth = 0.08f;
-        public const float MuzzleHeight = 1.3f;
-        public const float MuzzleForward = 1.45f;
+        public const float MuzzleHeight = 1.3f * RobotBodies.SmallRangedScale;   // MV-1477: follows the 75% body
+        public const float MuzzleForward = 1.45f * RobotBodies.SmallRangedScale;
 
         private float _cooldown;
         private float _aimElapsed;

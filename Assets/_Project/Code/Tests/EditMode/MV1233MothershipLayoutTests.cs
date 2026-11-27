@@ -52,10 +52,12 @@ namespace MaxWorlds.Tests.EditMode
         // Areas tab, not yet mirrored back" footing as MV-1292's own Projector/Jammer additions.
         private static readonly int[] ExpectedRobotCounts =
         {
-            14, 18, 16, 23, 24, 27, 22, 36, 29, 26,
-            25, 32, 30, 27, 39, 31, 32, 34, 33, 28,
-            38, 45, 39, 42, 33, 42, 41, 41, 41, 32,
+            14, 13, 11, 16, 17, 19, 15, 25, 20, 18,
+            17, 22, 21, 17, 27, 22, 21, 23, 23, 19,
+            27, 32, 27, 31, 23, 29, 28, 29, 27, 23,
         };
+        // MV-1477 (Lee, 27 Nov): Worlds 3-5 lose ~30% of their garrison (mostly melee) and gain Marksmen, Orbitals
+        // and Arc Strikers. a1 (the Hangar Bay's drawn layout) is untouched; a2-a30 hold the new counts above.
 
         private const int ExpectedAreaCount = 30;
         private const int ExpectedCradleTotal = 47;

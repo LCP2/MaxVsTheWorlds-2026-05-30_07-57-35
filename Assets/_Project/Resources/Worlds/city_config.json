@@ -2030,7 +2030,7 @@
    "garrisonDensity": "normal",
    "composition": {
     "bolter": 1,
-    "gunner": 1,
+    "orbital": 1,
     "launcher": 1,
     "arcstriker": 1,
     "bruiser": 2,
@@ -2329,7 +2329,7 @@
      "squad": "a4_e"
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 46.5,
      "z": 68.0,
      "level": 0,
@@ -2797,11 +2797,13 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "rusher": 10,
-    "bruiser": 5,
-    "gunner": 7,
+    "arcstriker": 2,
+    "orbital": 2,
+    "rusher": 5,
     "turret": 2,
-    "arcstriker": 1
+    "bolter": 3,
+    "bruiser": 3,
+    "gunner": 1
    },
    "surfaces": [
     {
@@ -3170,13 +3172,13 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 18.5,
      "z": 126.0,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 18.5,
      "z": 124.0,
      "level": 0
@@ -3188,7 +3190,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "arcstriker",
      "x": 6.0,
      "z": 122.0,
      "level": 0
@@ -3212,19 +3214,13 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 2.0,
-     "z": 120.5,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 25.5,
      "z": 120.0,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 25.5,
      "z": 117.5,
      "level": 0
@@ -3248,27 +3244,9 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 19.5,
-     "z": 111.0,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 16.0,
-     "z": 110.0,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 24.5,
      "z": 110.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 12.5,
-     "z": 109.5,
      "level": 0
     },
     {
@@ -3278,15 +3256,9 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 15.0,
      "z": 108.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 21.0,
-     "z": 108.0,
      "level": 0
     },
     {
@@ -3299,18 +3271,6 @@
      "kind": "gunner",
      "x": 17.0,
      "z": 107.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 18.5,
-     "z": 107.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 15.5,
-     "z": 106.5,
      "level": 0
     }
    ],
@@ -3356,11 +3316,12 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "bruiser": 6,
-    "gunner": 3,
-    "rusher": 10,
     "bolter": 3,
-    "turret": 2
+    "arcstriker": 2,
+    "rusher": 5,
+    "turret": 2,
+    "bruiser": 4,
+    "gunner": 1
    },
    "surfaces": [
     {
@@ -3761,25 +3722,13 @@
    ],
    "garrison": [
     {
-     "kind": "rusher",
-     "x": 61.5,
-     "z": 120.0,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 67.0,
      "z": 120.0,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 65.5,
-     "z": 119.5,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "arcstriker",
      "x": 60.5,
      "z": 114.0,
      "level": 0
@@ -3797,19 +3746,13 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 59.5,
-     "z": 111.0,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 62.5,
      "z": 111.0,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "arcstriker",
      "x": 55.0,
      "z": 109.0,
      "level": 0
@@ -3836,18 +3779,6 @@
      "kind": "bruiser",
      "x": 50.5,
      "z": 105.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 36.5,
-     "z": 104.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 43.5,
-     "z": 104.0,
      "level": 0
     },
     {
@@ -3888,19 +3819,7 @@
     },
     {
      "kind": "rusher",
-     "x": 47.5,
-     "z": 103.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 57.5,
-     "z": 103.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 59.5,
      "z": 103.5,
      "level": 0
     }
@@ -3953,11 +3872,12 @@
    "garrisonDensity": "heavy",
    "composition": {
     "turret": 4,
-    "rusher": 18,
-    "bruiser": 5,
-    "gunner": 4,
-    "heavy": 6,
-    "bolter": 5
+    "rusher": 12,
+    "orbital": 1,
+    "bolter": 5,
+    "gunner": 3,
+    "heavy": 1,
+    "bruiser": 2
    },
    "surfaces": [
     {
@@ -4424,39 +4344,9 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 78.0,
-     "z": 160.0,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 55.5,
-     "z": 159.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 73.5,
-     "z": 159.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 80.5,
-     "z": 159.5,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 58.0,
      "z": 158.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 81.0,
-     "z": 158.0,
      "level": 0
     },
     {
@@ -4497,18 +4387,6 @@
     },
     {
      "kind": "rusher",
-     "x": 80.5,
-     "z": 156.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 53.5,
-     "z": 155.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 60.5,
      "z": 155.5,
      "level": 0
@@ -4529,12 +4407,6 @@
      "kind": "turret",
      "x": 76.0,
      "z": 155.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 63.5,
-     "z": 152.5,
      "level": 0
     },
     {
@@ -4599,30 +4471,6 @@
     },
     {
      "kind": "rusher",
-     "x": 35.0,
-     "z": 146.0,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 36.5,
-     "z": 145.0,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 74.0,
-     "z": 144.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 48.5,
-     "z": 143.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 73.5,
      "z": 143.0,
      "level": 0
@@ -4643,18 +4491,6 @@
      "kind": "bruiser",
      "x": 45.5,
      "z": 141.0,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 74.5,
-     "z": 141.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 73.0,
-     "z": 140.5,
      "level": 0
     },
     {
@@ -4729,13 +4565,13 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "blinker": 2,
-    "rusher": 10,
-    "gunner": 1,
-    "turret": 2,
-    "bruiser": 5,
-    "heavy": 3,
-    "bolter": 2
+    "orbital": 2,
+    "heavy": 1,
+    "bruiser": 3,
+    "rusher": 6,
+    "arcstriker": 1,
+    "bolter": 2,
+    "blinker": 1
    },
    "surfaces": [
     {
@@ -4982,13 +4818,7 @@
    ],
    "garrison": [
     {
-     "kind": "bruiser",
-     "x": 116.5,
-     "z": 153.0,
-     "level": 0
-    },
-    {
-     "kind": "turret",
+     "kind": "orbital",
      "x": 113.5,
      "z": 152.0,
      "level": 0
@@ -5000,39 +4830,15 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 103.5,
-     "z": 144.0,
-     "level": 0
-    },
-    {
      "kind": "bruiser",
      "x": 106.5,
      "z": 144.0,
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 117.0,
-     "z": 144.5,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 101.5,
      "z": 143.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 93.5,
-     "z": 142.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 96.0,
-     "z": 142.5,
      "level": 0
     },
     {
@@ -5048,13 +4854,7 @@
      "level": 0
     },
     {
-     "kind": "blinker",
-     "x": 94.0,
-     "z": 139.5,
-     "level": 0
-    },
-    {
-     "kind": "turret",
+     "kind": "arcstriker",
      "x": 100.0,
      "z": 139.5,
      "level": 0
@@ -5075,12 +4875,6 @@
      "kind": "bolter",
      "x": 96.5,
      "z": 137.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 103.5,
-     "z": 137.5,
      "level": 0
     },
     {
@@ -5108,21 +4902,9 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 100.0,
      "z": 134.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 113.0,
-     "z": 131.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 100.5,
-     "z": 130.5,
      "level": 0
     },
     {
@@ -5167,14 +4949,13 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
+    "rusher": 6,
+    "bolter": 3,
     "turret": 2,
-    "bolter": 1,
-    "gunner": 5,
-    "bruiser": 2,
-    "rusher": 10,
-    "heavy": 2,
-    "launcher": 2,
-    "blinker": 1
+    "arcstriker": 2,
+    "gunner": 3,
+    "bruiser": 1,
+    "heavy": 1
    },
    "surfaces": [],
    "cover": [
@@ -5473,27 +5254,15 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 93.0,
      "z": 180.5,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 97.5,
      "z": 180.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 99.5,
-     "z": 180.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 107.0,
-     "z": 177.0,
      "level": 0
     },
     {
@@ -5509,27 +5278,9 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 95.5,
-     "z": 171.5,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 103.0,
-     "z": 171.0,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 99.0,
      "z": 170.0,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 85.5,
-     "z": 169.5,
      "level": 0
     },
     {
@@ -5552,24 +5303,12 @@
     },
     {
      "kind": "rusher",
-     "x": 87.5,
-     "z": 167.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 90.5,
      "z": 167.0,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 97.5,
-     "z": 167.0,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 100.0,
      "z": 166.5,
      "level": 0
@@ -5671,14 +5410,13 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "rusher": 15,
-    "bruiser": 3,
-    "turret": 4,
-    "bolter": 2,
+    "rusher": 9,
+    "bruiser": 2,
+    "orbital": 1,
+    "bolter": 3,
     "launcher": 3,
-    "gunner": 2,
-    "heavy": 2,
-    "brute": 4
+    "brute": 2,
+    "turret": 4
    },
    "surfaces": [],
    "cover": [
@@ -7063,39 +6801,15 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 70.5,
-     "z": 196.0,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 66.0,
-     "z": 195.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 77.0,
-     "z": 195.5,
-     "level": 0
-    },
-    {
      "kind": "bruiser",
      "x": 70.0,
      "z": 192.5,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 81.0,
      "z": 192.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 65.0,
-     "z": 191.5,
      "level": 0
     },
     {
@@ -7105,13 +6819,7 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 81.0,
-     "z": 190.5,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 73.0,
      "z": 189.0,
      "level": 0
@@ -7153,18 +6861,6 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 81.0,
-     "z": 184.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 66.0,
-     "z": 179.5,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 77.0,
      "z": 178.5,
@@ -7177,12 +6873,6 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 65.0,
-     "z": 175.5,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 77.0,
      "z": 175.5,
@@ -7192,12 +6882,6 @@
      "kind": "rusher",
      "x": 65.0,
      "z": 174.0,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 75.0,
-     "z": 174.5,
      "level": 0
     },
     {
@@ -7219,21 +6903,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 77.0,
-     "z": 172.5,
-     "level": 0
-    },
-    {
      "kind": "launcher",
      "x": 61.0,
      "z": 171.0,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 62.5,
-     "z": 168.0,
      "level": 0
     },
     {
@@ -7309,12 +6981,13 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "gunner": 3,
-    "rusher": 11,
-    "brute": 4,
+    "orbital": 2,
+    "brute": 3,
+    "rusher": 5,
+    "bolter": 3,
     "turret": 3,
-    "heavy": 1,
-    "launcher": 4
+    "arcstriker": 1,
+    "launcher": 1
    },
    "surfaces": [
     {
@@ -7694,15 +7367,9 @@
    ],
    "garrison": [
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 71.0,
      "z": 224.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 71.0,
-     "z": 213.5,
      "level": 0
     },
     {
@@ -7724,12 +7391,6 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 55.5,
-     "z": 216.5,
-     "level": 0
-    },
-    {
      "kind": "brute",
      "x": 74.0,
      "z": 213.0,
@@ -7742,31 +7403,13 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 68.0,
-     "z": 216.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 62.0,
-     "z": 222.0,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 68.0,
      "z": 212.5,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 71.5,
-     "z": 216.5,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 59.0,
      "z": 216.5,
      "level": 0
@@ -7778,31 +7421,19 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 74.5,
-     "z": 215.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 71.0,
-     "z": 215.0,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 54.0,
      "z": 222.5,
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 74.0,
      "z": 222.0,
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "bolter",
      "x": 72.5,
      "z": 214.0,
      "level": 0
@@ -7820,15 +7451,9 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "bolter",
      "x": 84.5,
      "z": 203.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 63.5,
-     "z": 223.0,
      "level": 0
     },
     {
@@ -7893,15 +7518,16 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "bruiser": 10,
-    "turret": 7,
-    "rusher": 23,
-    "launcher": 3,
-    "gunner": 1,
-    "heavy": 9,
+    "turret": 6,
+    "arcstriker": 2,
+    "rusher": 15,
+    "heavy": 4,
     "bolter": 4,
-    "brute": 2,
-    "blinker": 1
+    "bruiser": 3,
+    "brute": 1,
+    "blinker": 1,
+    "gunner": 1,
+    "launcher": 2
    },
    "surfaces": [
     {
@@ -8263,21 +7889,9 @@
    ],
    "garrison": [
     {
-     "kind": "rusher",
-     "x": 97.5,
-     "z": 225.5,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 110.39,
      "z": 225.39,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 103.5,
-     "z": 224.5,
      "level": 0
     },
     {
@@ -8287,7 +7901,7 @@
      "level": 0
     },
     {
-     "kind": "turret",
+     "kind": "arcstriker",
      "x": 92.65,
      "z": 219.5,
      "level": 0
@@ -8311,57 +7925,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 106.5,
-     "z": 218.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 93.5,
-     "z": 216.5,
-     "level": 0
-    },
-    {
      "kind": "heavy",
      "x": 102.5,
      "z": 216.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 93.5,
-     "z": 214.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 102.65,
-     "z": 214.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 98.5,
-     "z": 213.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 100.31,
-     "z": 213.55,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 106.5,
-     "z": 213.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 108.31,
-     "z": 213.55,
      "level": 0
     },
     {
@@ -8373,12 +7939,6 @@
     {
      "kind": "heavy",
      "x": 97.7,
-     "z": 212.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 99.5,
      "z": 212.5,
      "level": 0
     },
@@ -8413,18 +7973,6 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 98.5,
-     "z": 211.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 100.35,
-     "z": 211.5,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 102.5,
      "z": 211.5,
@@ -8438,24 +7986,6 @@
     },
     {
      "kind": "bruiser",
-     "x": 106.5,
-     "z": 211.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 108.35,
-     "z": 211.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 93.5,
-     "z": 210.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
      "x": 97.65,
      "z": 210.5,
      "level": 0
@@ -8463,12 +7993,6 @@
     {
      "kind": "bruiser",
      "x": 99.5,
-     "z": 210.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 105.65,
      "z": 210.5,
      "level": 0
     },
@@ -8498,26 +8022,8 @@
     },
     {
      "kind": "rusher",
-     "x": 106.5,
-     "z": 209.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 108.5,
-     "z": 209.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 111.5,
      "z": 209.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 93.5,
-     "z": 208.5,
      "level": 0
     },
     {
@@ -8560,12 +8066,6 @@
      "kind": "gunner",
      "x": 103.5,
      "z": 208.35,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 93.5,
-     "z": 206.5,
      "level": 0
     },
     {
@@ -8617,7 +8117,7 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 94.0,
      "z": 196.0,
      "level": 0
@@ -8688,15 +8188,13 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "brute": 1,
-    "rusher": 11,
+    "rusher": 8,
     "launcher": 1,
     "turret": 3,
     "bolter": 4,
-    "gunner": 2,
-    "bruiser": 2,
-    "blinker": 1,
-    "heavy": 1
+    "orbital": 1,
+    "gunner": 1,
+    "blinker": 1
    },
    "surfaces": [
     {
@@ -8891,12 +8389,6 @@
    ],
    "garrison": [
     {
-     "kind": "brute",
-     "x": 106.5,
-     "z": 251.5,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 102.0,
      "z": 258.0,
@@ -8969,7 +8461,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 103.0,
      "z": 260.0,
      "level": 0
@@ -8993,18 +8485,6 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 108.0,
-     "z": 250.0,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 96.5,
-     "z": 265.0,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 100.0,
      "z": 257.5,
@@ -9017,33 +8497,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 102.0,
-     "z": 263.0,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 95.0,
      "z": 268.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 102.5,
-     "z": 266.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 99.5,
-     "z": 265.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 100.0,
-     "z": 262.5,
      "level": 0
     }
    ],
@@ -9096,14 +8552,13 @@
    "garrisonDensity": "heavy",
    "composition": {
     "turret": 4,
-    "blinker": 5,
-    "brute": 5,
-    "bruiser": 5,
-    "bolter": 2,
-    "rusher": 19,
-    "launcher": 2,
-    "gunner": 2,
-    "heavy": 1
+    "blinker": 3,
+    "brute": 3,
+    "bolter": 3,
+    "arcstriker": 1,
+    "rusher": 12,
+    "bruiser": 1,
+    "orbital": 2
    },
    "surfaces": [
     {
@@ -9669,51 +9124,21 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 148.0,
-     "z": 280.0,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 146.5,
      "z": 238.5,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 159.5,
-     "z": 257.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 157.5,
-     "z": 269.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 141.5,
-     "z": 277.0,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 157.5,
      "z": 253.0,
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "bolter",
      "x": 156.5,
      "z": 279.0,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 155.5,
-     "z": 258.5,
      "level": 0
     },
     {
@@ -9741,33 +9166,9 @@
      "level": 0
     },
     {
-     "kind": "brute",
-     "x": 160.0,
-     "z": 246.5,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 150.5,
-     "z": 277.0,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 157.0,
-     "z": 280.5,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 152.5,
      "z": 240.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 148.5,
-     "z": 239.0,
      "level": 0
     },
     {
@@ -9801,33 +9202,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 149.5,
-     "z": 275.0,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 135.0,
      "z": 240.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 151.0,
-     "z": 238.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 143.5,
-     "z": 237.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 147.0,
-     "z": 242.5,
      "level": 0
     },
     {
@@ -9843,21 +9220,9 @@
      "level": 0
     },
     {
-     "kind": "brute",
-     "x": 160.0,
-     "z": 260.0,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 155.0,
      "z": 267.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 146.0,
-     "z": 281.0,
      "level": 0
     },
     {
@@ -9867,7 +9232,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 143.5,
      "z": 274.0,
      "level": 0
@@ -9897,19 +9262,13 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 156.5,
-     "z": 254.5,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 152.0,
      "z": 273.5,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 157.0,
      "z": 267.5,
      "level": 0
@@ -10010,13 +9369,13 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "rusher": 11,
+    "rusher": 7,
     "turret": 3,
-    "launcher": 2,
-    "brute": 2,
+    "arcstriker": 2,
     "gunner": 2,
-    "heavy": 4,
-    "bolter": 3
+    "bolter": 3,
+    "brute": 1,
+    "heavy": 1
    },
    "surfaces": [
     {
@@ -10224,27 +9583,15 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 136.5,
      "z": 313.5,
      "level": 0
     },
     {
      "kind": "rusher",
-     "x": 142.0,
-     "z": 292.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 147.0,
      "z": 293.0,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 147.0,
-     "z": 295.5,
      "level": 0
     },
     {
@@ -10260,31 +9607,13 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 149.0,
-     "z": 307.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 145.0,
-     "z": 290.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 144.5,
-     "z": 295.5,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 134.5,
      "z": 312.0,
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 150.5,
      "z": 313.0,
      "level": 0
@@ -10308,21 +9637,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 140.0,
-     "z": 296.5,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 142.0,
      "z": 294.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 124.5,
-     "z": 308.0,
      "level": 0
     },
     {
@@ -10359,12 +9676,6 @@
      "kind": "turret",
      "x": 130.5,
      "z": 304.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 126.5,
-     "z": 311.0,
      "level": 0
     },
     {
@@ -10439,15 +9750,15 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "rusher": 16,
+    "rusher": 8,
     "bolter": 4,
-    "heavy": 5,
+    "heavy": 3,
     "launcher": 2,
-    "gunner": 2,
-    "bruiser": 1,
+    "orbital": 1,
     "turret": 4,
-    "brute": 2,
-    "blinker": 1
+    "brute": 1,
+    "blinker": 1,
+    "gunner": 1
    },
    "surfaces": [],
    "cover": [
@@ -11788,7 +11099,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 108.0,
      "z": 307.5,
      "level": 0
@@ -11803,12 +11114,6 @@
      "kind": "rusher",
      "x": 110.5,
      "z": 303.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 117.0,
-     "z": 310.0,
      "level": 0
     },
     {
@@ -11830,50 +11135,14 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 120.0,
-     "z": 310.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 106.0,
-     "z": 309.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 119.5,
-     "z": 309.0,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 85.0,
-     "z": 295.5,
-     "level": 0
-    },
-    {
      "kind": "launcher",
      "x": 108.5,
      "z": 304.0,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 120.0,
-     "z": 307.5,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 106.5,
-     "z": 310.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 118.5,
      "z": 310.5,
      "level": 0
     },
@@ -11896,21 +11165,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 113.0,
-     "z": 291.5,
-     "level": 0
-    },
-    {
      "kind": "brute",
      "x": 103.0,
      "z": 297.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 89.0,
-     "z": 298.5,
      "level": 0
     },
     {
@@ -11929,12 +11186,6 @@
      "kind": "blinker",
      "x": 104.0,
      "z": 310.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 93.0,
-     "z": 295.5,
      "level": 0
     },
     {
@@ -11959,18 +11210,6 @@
      "kind": "heavy",
      "x": 104.5,
      "z": 291.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 101.5,
-     "z": 295.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 89.0,
-     "z": 307.5,
      "level": 0
     }
    ],
@@ -12034,13 +11273,15 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "bolter": 2,
-    "gunner": 4,
-    "bruiser": 4,
-    "rusher": 12,
-    "launcher": 2,
+    "bolter": 3,
+    "orbital": 2,
+    "rusher": 6,
+    "bruiser": 2,
+    "arcstriker": 1,
     "heavy": 1,
-    "turret": 3
+    "turret": 3,
+    "launcher": 1,
+    "gunner": 1
    },
    "surfaces": [],
    "cover": [
@@ -12325,31 +11566,19 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 114.0,
      "z": 326.5,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 104.0,
      "z": 344.0,
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 105.0,
-     "z": 341.0,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 108.5,
-     "z": 339.5,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 94.5,
      "z": 329.5,
      "level": 0
@@ -12373,21 +11602,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 111.5,
-     "z": 333.0,
-     "level": 0
-    },
-    {
      "kind": "bruiser",
      "x": 102.0,
      "z": 332.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 96.5,
-     "z": 329.0,
      "level": 0
     },
     {
@@ -12397,7 +11614,7 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 102.5,
      "z": 341.5,
      "level": 0
@@ -12409,21 +11626,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 110.0,
-     "z": 340.0,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 91.0,
      "z": 323.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 97.5,
-     "z": 341.0,
      "level": 0
     },
     {
@@ -12436,18 +11641,6 @@
      "kind": "turret",
      "x": 98.5,
      "z": 343.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 103.0,
-     "z": 329.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 97.5,
-     "z": 324.0,
      "level": 0
     },
     {
@@ -12547,15 +11740,15 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "launcher": 3,
-    "rusher": 16,
+    "arcstriker": 2,
     "turret": 4,
-    "bruiser": 5,
-    "gunner": 2,
+    "rusher": 6,
+    "bruiser": 3,
+    "bolter": 3,
     "brute": 3,
-    "blinker": 3,
-    "bolter": 1,
-    "heavy": 1
+    "blinker": 2,
+    "heavy": 1,
+    "launcher": 1
    },
    "surfaces": [],
    "cover": [
@@ -13593,15 +12786,9 @@
    ],
    "garrison": [
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 126.0,
      "z": 329.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 142.0,
-     "z": 330.0,
      "level": 0
     },
     {
@@ -13623,7 +12810,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 126.0,
      "z": 327.5,
      "level": 0
@@ -13635,31 +12822,13 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 138.5,
-     "z": 330.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 142.5,
-     "z": 337.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 135.5,
-     "z": 330.5,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 129.0,
      "z": 325.0,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 140.5,
      "z": 329.5,
      "level": 0
@@ -13689,21 +12858,9 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 137.0,
-     "z": 333.0,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 137.0,
      "z": 330.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 135.5,
-     "z": 332.5,
      "level": 0
     },
     {
@@ -13738,36 +12895,12 @@
     },
     {
      "kind": "rusher",
-     "x": 145.0,
-     "z": 340.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 137.0,
-     "z": 331.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 129.0,
      "z": 330.0,
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 118.0,
-     "z": 323.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 130.5,
-     "z": 322.0,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 145.0,
      "z": 337.5,
      "level": 0
@@ -13776,12 +12909,6 @@
      "kind": "rusher",
      "x": 119.0,
      "z": 336.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 118.0,
-     "z": 339.5,
      "level": 0
     },
     {
@@ -13800,18 +12927,6 @@
      "kind": "bruiser",
      "x": 144.5,
      "z": 321.5,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 141.5,
-     "z": 341.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 118.0,
-     "z": 341.0,
      "level": 0
     },
     {
@@ -13881,15 +12996,15 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "brute": 3,
-    "rusher": 12,
+    "rusher": 8,
     "bolter": 3,
     "turret": 3,
-    "gunner": 2,
-    "blinker": 2,
+    "orbital": 1,
     "bruiser": 1,
     "launcher": 1,
-    "heavy": 1
+    "heavy": 1,
+    "blinker": 1,
+    "gunner": 1
    },
    "surfaces": [
     {
@@ -14131,21 +13246,9 @@
    ],
    "garrison": [
     {
-     "kind": "brute",
-     "x": 123.0,
-     "z": 362.5,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 127.5,
      "z": 385.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 137.0,
-     "z": 382.5,
      "level": 0
     },
     {
@@ -14173,15 +13276,9 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 130.5,
      "z": 361.5,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 135.0,
-     "z": 364.0,
      "level": 0
     },
     {
@@ -14222,18 +13319,6 @@
     },
     {
      "kind": "rusher",
-     "x": 129.5,
-     "z": 373.0,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 131.5,
-     "z": 363.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 136.5,
      "z": 380.0,
      "level": 0
@@ -14257,12 +13342,6 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 131.5,
-     "z": 386.5,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 126.0,
      "z": 376.5,
@@ -14272,18 +13351,6 @@
      "kind": "blinker",
      "x": 119.0,
      "z": 387.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 122.0,
-     "z": 374.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 137.5,
-     "z": 378.0,
      "level": 0
     },
     {
@@ -14361,14 +13428,15 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "rusher": 12,
-    "gunner": 5,
+    "orbital": 2,
     "heavy": 2,
-    "brute": 3,
+    "brute": 2,
     "blinker": 2,
+    "bolter": 3,
     "turret": 3,
+    "rusher": 3,
     "bruiser": 1,
-    "launcher": 1
+    "arcstriker": 1
    },
    "surfaces": [
     {
@@ -14695,13 +13763,7 @@
    ],
    "garrison": [
     {
-     "kind": "rusher",
-     "x": 155.5,
-     "z": 369.5,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 174.5,
      "z": 350.0,
      "level": 0
@@ -14719,7 +13781,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 144.0,
      "z": 380.0,
      "level": 0
@@ -14731,27 +13793,9 @@
      "level": 0
     },
     {
-     "kind": "brute",
-     "x": 170.5,
-     "z": 354.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 156.5,
-     "z": 373.5,
-     "level": 0
-    },
-    {
      "kind": "blinker",
      "x": 156.5,
      "z": 358.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 174.5,
-     "z": 358.0,
      "level": 0
     },
     {
@@ -14761,13 +13805,13 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 170.5,
      "z": 352.0,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 149.0,
      "z": 381.0,
      "level": 0
@@ -14779,45 +13823,15 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 170.5,
-     "z": 360.0,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 158.5,
      "z": 375.5,
      "level": 0
     },
     {
      "kind": "rusher",
-     "x": 143.0,
-     "z": 376.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 170.5,
-     "z": 350.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 169.5,
-     "z": 356.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 153.5,
      "z": 370.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 152.5,
-     "z": 369.0,
      "level": 0
     },
     {
@@ -14839,12 +13853,6 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 155.5,
-     "z": 378.0,
-     "level": 0
-    },
-    {
      "kind": "blinker",
      "x": 173.0,
      "z": 361.5,
@@ -14857,7 +13865,7 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 170.5,
      "z": 358.5,
      "level": 0
@@ -14924,14 +13932,14 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "heavy": 3,
-    "rusher": 20,
     "turret": 5,
-    "bruiser": 5,
-    "gunner": 3,
-    "blinker": 5,
-    "launcher": 2,
-    "bolter": 3,
+    "rusher": 10,
+    "bruiser": 3,
+    "bolter": 4,
+    "blinker": 4,
+    "gunner": 2,
+    "heavy": 1,
+    "arcstriker": 2,
     "brute": 1
    },
    "surfaces": [
@@ -15614,18 +14622,6 @@
    ],
    "garrison": [
     {
-     "kind": "heavy",
-     "x": 179.0,
-     "z": 402.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 146.0,
-     "z": 413.0,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 185.5,
      "z": 414.5,
@@ -15656,19 +14652,13 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 160.0,
-     "z": 419.5,
-     "level": 0
-    },
-    {
      "kind": "bruiser",
      "x": 179.0,
      "z": 404.0,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 178.0,
      "z": 413.5,
      "level": 0
@@ -15692,21 +14682,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 163.5,
-     "z": 419.5,
-     "level": 0
-    },
-    {
      "kind": "blinker",
      "x": 184.0,
      "z": 412.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 153.5,
-     "z": 415.5,
      "level": 0
     },
     {
@@ -15722,45 +14700,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 146.0,
-     "z": 416.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 157.0,
-     "z": 417.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 149.5,
-     "z": 414.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 166.5,
-     "z": 412.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 172.0,
-     "z": 415.5,
-     "level": 0
-    },
-    {
      "kind": "heavy",
      "x": 177.5,
      "z": 416.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 166.5,
-     "z": 419.5,
      "level": 0
     },
     {
@@ -15776,13 +14718,7 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 175.5,
-     "z": 412.0,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 162.0,
      "z": 420.0,
      "level": 0
@@ -15842,15 +14778,9 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 155.0,
      "z": 418.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 175.5,
-     "z": 403.0,
      "level": 0
     },
     {
@@ -15875,18 +14805,6 @@
      "kind": "brute",
      "x": 159.0,
      "z": 401.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 171.5,
-     "z": 402.0,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 169.0,
-     "z": 414.5,
      "level": 0
     },
     {
@@ -15985,12 +14903,13 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "rusher": 12,
     "bolter": 3,
     "turret": 3,
-    "blinker": 3,
-    "gunner": 2,
-    "bruiser": 3,
+    "blinker": 2,
+    "rusher": 5,
+    "orbital": 1,
+    "gunner": 1,
+    "bruiser": 2,
     "launcher": 3
    },
    "surfaces": [
@@ -16163,12 +15082,6 @@
    ],
    "garrison": [
     {
-     "kind": "rusher",
-     "x": 214.0,
-     "z": 408.5,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 213.5,
      "z": 404.0,
@@ -16205,7 +15118,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 211.0,
      "z": 411.5,
      "level": 0
@@ -16229,36 +15142,6 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 217.0,
-     "z": 404.5,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 211.5,
-     "z": 401.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 215.5,
-     "z": 409.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 213.0,
-     "z": 405.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 207.5,
-     "z": 408.0,
-     "level": 0
-    },
-    {
      "kind": "blinker",
      "x": 213.5,
      "z": 397.5,
@@ -16266,20 +15149,8 @@
     },
     {
      "kind": "rusher",
-     "x": 227.5,
-     "z": 392.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 211.5,
      "z": 403.0,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 230.0,
-     "z": 393.5,
      "level": 0
     },
     {
@@ -16322,12 +15193,6 @@
      "kind": "turret",
      "x": 225.5,
      "z": 408.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 227.5,
-     "z": 412.0,
      "level": 0
     },
     {
@@ -16402,14 +15267,15 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "rusher": 17,
-    "gunner": 6,
+    "rusher": 10,
+    "orbital": 2,
     "turret": 4,
-    "blinker": 3,
-    "launcher": 3,
+    "arcstriker": 1,
     "bruiser": 2,
-    "brute": 1,
-    "bolter": 4
+    "launcher": 2,
+    "blinker": 1,
+    "bolter": 5,
+    "gunner": 3
    },
    "surfaces": [
     {
@@ -16611,15 +15477,9 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 223.5,
      "z": 423.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 224.0,
-     "z": 421.0,
      "level": 0
     },
     {
@@ -16635,21 +15495,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 216.5,
-     "z": 433.5,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 214.0,
      "z": 434.5,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 196.5,
-     "z": 419.5,
      "level": 0
     },
     {
@@ -16659,31 +15507,13 @@
      "level": 0
     },
     {
-     "kind": "blinker",
-     "x": 216.0,
-     "z": 436.0,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 201.5,
      "z": 420.5,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 200.5,
-     "z": 445.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 221.0,
-     "z": 426.5,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 221.5,
      "z": 421.5,
      "level": 0
@@ -16695,7 +15525,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 218.0,
      "z": 438.0,
      "level": 0
@@ -16704,12 +15534,6 @@
      "kind": "bruiser",
      "x": 197.5,
      "z": 422.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 217.0,
-     "z": 426.0,
      "level": 0
     },
     {
@@ -16743,19 +15567,13 @@
      "level": 0
     },
     {
-     "kind": "brute",
-     "x": 200.5,
-     "z": 434.5,
-     "level": 0
-    },
-    {
      "kind": "blinker",
      "x": 200.0,
      "z": 431.5,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 207.0,
      "z": 436.5,
      "level": 0
@@ -16764,12 +15582,6 @@
      "kind": "gunner",
      "x": 215.5,
      "z": 427.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 208.0,
-     "z": 434.5,
      "level": 0
     },
     {
@@ -16812,12 +15624,6 @@
      "kind": "rusher",
      "x": 217.0,
      "z": 445.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 215.5,
-     "z": 445.0,
      "level": 0
     },
     {
@@ -16905,15 +15711,14 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "rusher": 17,
+    "rusher": 7,
     "turret": 4,
     "bolter": 5,
-    "heavy": 1,
-    "gunner": 3,
+    "arcstriker": 2,
     "blinker": 4,
-    "launcher": 1,
-    "brute": 3,
-    "bruiser": 2
+    "bruiser": 2,
+    "brute": 1,
+    "gunner": 2
    },
    "surfaces": [],
    "cover": [
@@ -18072,12 +16877,6 @@
    "garrison": [
     {
      "kind": "rusher",
-     "x": 161.0,
-     "z": 432.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 185.0,
      "z": 428.0,
      "level": 0
@@ -18101,13 +16900,7 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 185.0,
-     "z": 430.0,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "arcstriker",
      "x": 176.0,
      "z": 440.5,
      "level": 0
@@ -18125,19 +16918,13 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 164.0,
-     "z": 431.0,
-     "level": 0
-    },
-    {
      "kind": "blinker",
      "x": 184.0,
      "z": 437.5,
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 170.0,
      "z": 443.0,
      "level": 0
@@ -18161,27 +16948,9 @@
      "level": 0
     },
     {
-     "kind": "brute",
-     "x": 168.0,
-     "z": 437.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 184.0,
-     "z": 434.0,
-     "level": 0
-    },
-    {
      "kind": "blinker",
      "x": 184.0,
      "z": 436.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 176.5,
-     "z": 439.0,
      "level": 0
     },
     {
@@ -18233,12 +17002,6 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 176.0,
-     "z": 430.5,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 168.0,
      "z": 445.0,
@@ -18251,30 +17014,6 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 188.5,
-     "z": 446.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 174.5,
-     "z": 430.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 188.0,
-     "z": 429.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 180.0,
-     "z": 426.5,
-     "level": 0
-    },
-    {
      "kind": "gunner",
      "x": 170.5,
      "z": 430.0,
@@ -18282,20 +17021,8 @@
     },
     {
      "kind": "rusher",
-     "x": 168.0,
-     "z": 428.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 188.0,
      "z": 435.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 177.0,
-     "z": 447.0,
      "level": 0
     },
     {
@@ -18388,14 +17115,13 @@
    "hasShed": false,
    "garrisonDensity": "normal",
    "composition": {
-    "rusher": 13,
-    "heavy": 2,
-    "blinker": 4,
-    "brute": 2,
+    "rusher": 7,
+    "heavy": 1,
+    "blinker": 3,
     "turret": 3,
-    "bolter": 1,
-    "launcher": 4,
-    "gunner": 1
+    "bolter": 3,
+    "launcher": 2,
+    "orbital": 1
    },
    "surfaces": [],
    "cover": [
@@ -18696,12 +17422,6 @@
      "level": 0
     },
     {
-     "kind": "heavy",
-     "x": 190.0,
-     "z": 479.0,
-     "level": 0
-    },
-    {
      "kind": "blinker",
      "x": 169.0,
      "z": 479.5,
@@ -18711,24 +17431,6 @@
      "kind": "rusher",
      "x": 161.0,
      "z": 475.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 190.5,
-     "z": 476.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 180.5,
-     "z": 464.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 175.0,
-     "z": 470.5,
      "level": 0
     },
     {
@@ -18768,45 +17470,21 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "bolter",
      "x": 176.5,
      "z": 470.0,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 189.0,
-     "z": 473.0,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "bolter",
      "x": 175.0,
      "z": 460.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 180.0,
-     "z": 466.0,
      "level": 0
     },
     {
      "kind": "turret",
      "x": 169.0,
      "z": 474.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 181.5,
-     "z": 475.5,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 174.5,
-     "z": 463.0,
      "level": 0
     },
     {
@@ -18835,20 +17513,8 @@
     },
     {
      "kind": "rusher",
-     "x": 165.0,
-     "z": 460.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 163.5,
      "z": 459.0,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 170.5,
-     "z": 466.5,
      "level": 0
     },
     {
@@ -18858,7 +17524,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 181.5,
      "z": 478.0,
      "level": 0
@@ -18929,15 +17595,16 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "rusher": 17,
-    "launcher": 3,
-    "gunner": 3,
-    "brute": 3,
+    "rusher": 9,
+    "arcstriker": 1,
+    "orbital": 2,
+    "brute": 2,
     "turret": 4,
     "bolter": 6,
-    "bruiser": 1,
+    "launcher": 2,
     "blinker": 2,
-    "heavy": 2
+    "gunner": 1,
+    "heavy": 1
    },
    "surfaces": [
     {
@@ -19206,13 +17873,13 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 225.0,
      "z": 473.0,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 220.5,
      "z": 476.0,
      "level": 0
@@ -19230,7 +17897,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 214.5,
      "z": 461.0,
      "level": 0
@@ -19272,18 +17939,6 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 209.5,
-     "z": 466.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 215.0,
-     "z": 471.5,
-     "level": 0
-    },
-    {
      "kind": "launcher",
      "x": 216.5,
      "z": 475.0,
@@ -19309,32 +17964,14 @@
     },
     {
      "kind": "rusher",
-     "x": 220.0,
-     "z": 452.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 226.0,
      "z": 475.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 217.5,
-     "z": 478.0,
      "level": 0
     },
     {
      "kind": "turret",
      "x": 202.0,
      "z": 460.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 228.0,
-     "z": 478.5,
      "level": 0
     },
     {
@@ -19353,12 +17990,6 @@
      "kind": "bolter",
      "x": 214.5,
      "z": 474.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 213.0,
-     "z": 477.0,
      "level": 0
     },
     {
@@ -19381,20 +18012,8 @@
     },
     {
      "kind": "rusher",
-     "x": 213.0,
-     "z": 472.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 231.0,
      "z": 477.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 206.5,
-     "z": 462.0,
      "level": 0
     },
     {
@@ -19404,33 +18023,15 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 226.5,
-     "z": 463.5,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 218.0,
      "z": 451.5,
      "level": 0
     },
     {
-     "kind": "brute",
-     "x": 229.5,
-     "z": 479.0,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 206.0,
      "z": 463.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 222.0,
-     "z": 477.0,
      "level": 0
     },
     {
@@ -19513,15 +18114,15 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "launcher": 2,
-    "brute": 4,
+    "arcstriker": 2,
     "gunner": 3,
-    "rusher": 17,
+    "rusher": 9,
     "turret": 4,
     "bolter": 4,
-    "blinker": 2,
     "heavy": 2,
-    "bruiser": 3
+    "brute": 1,
+    "bruiser": 2,
+    "blinker": 1
    },
    "surfaces": [
     {
@@ -19753,15 +18354,9 @@
    ],
    "garrison": [
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 220.5,
      "z": 503.0,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 210.0,
-     "z": 509.5,
      "level": 0
     },
     {
@@ -19778,26 +18373,8 @@
     },
     {
      "kind": "rusher",
-     "x": 219.0,
-     "z": 498.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 217.0,
-     "z": 501.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 206.5,
      "z": 507.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 201.0,
-     "z": 518.5,
      "level": 0
     },
     {
@@ -19807,39 +18384,15 @@
      "level": 0
     },
     {
-     "kind": "brute",
-     "x": 222.0,
-     "z": 502.5,
-     "level": 0
-    },
-    {
      "kind": "bolter",
      "x": 217.5,
      "z": 499.0,
      "level": 0
     },
     {
-     "kind": "blinker",
-     "x": 207.5,
-     "z": 521.0,
-     "level": 0
-    },
-    {
      "kind": "turret",
      "x": 221.5,
      "z": 500.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 216.0,
-     "z": 498.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 207.0,
-     "z": 510.0,
      "level": 0
     },
     {
@@ -19886,12 +18439,6 @@
     },
     {
      "kind": "rusher",
-     "x": 219.5,
-     "z": 514.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 212.0,
      "z": 519.0,
      "level": 0
@@ -19903,12 +18450,6 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 212.5,
-     "z": 511.0,
-     "level": 0
-    },
-    {
      "kind": "heavy",
      "x": 204.5,
      "z": 514.0,
@@ -19916,20 +18457,8 @@
     },
     {
      "kind": "bruiser",
-     "x": 219.5,
-     "z": 495.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
      "x": 204.5,
      "z": 520.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 204.5,
-     "z": 506.0,
      "level": 0
     },
     {
@@ -19945,7 +18474,7 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 214.0,
      "z": 497.5,
      "level": 0
@@ -19984,12 +18513,6 @@
      "kind": "gunner",
      "x": 202.5,
      "z": 516.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 218.5,
-     "z": 494.0,
      "level": 0
     },
     {
@@ -20059,15 +18582,15 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "gunner": 3,
+    "orbital": 1,
     "launcher": 4,
-    "blinker": 4,
-    "rusher": 17,
-    "bolter": 2,
+    "rusher": 9,
+    "bolter": 4,
     "turret": 4,
-    "brute": 3,
-    "bruiser": 3,
-    "heavy": 1
+    "blinker": 2,
+    "heavy": 1,
+    "bruiser": 1,
+    "brute": 2
    },
    "surfaces": [
     {
@@ -20422,7 +18945,7 @@
    ],
    "garrison": [
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 255.0,
      "z": 505.0,
      "level": 0
@@ -20434,39 +18957,15 @@
      "level": 0
     },
     {
-     "kind": "blinker",
-     "x": 256.5,
-     "z": 517.0,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 250.5,
      "z": 505.5,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 253.0,
-     "z": 515.0,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 254.5,
      "z": 508.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 250.0,
-     "z": 486.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 258.0,
-     "z": 515.5,
      "level": 0
     },
     {
@@ -20485,12 +18984,6 @@
      "kind": "rusher",
      "x": 229.0,
      "z": 515.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 252.5,
-     "z": 512.5,
      "level": 0
     },
     {
@@ -20518,42 +19011,6 @@
      "level": 0
     },
     {
-     "kind": "blinker",
-     "x": 252.0,
-     "z": 501.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 239.5,
-     "z": 511.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 243.5,
-     "z": 490.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 247.0,
-     "z": 516.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 251.5,
-     "z": 486.0,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 258.5,
-     "z": 513.0,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 240.5,
      "z": 502.5,
@@ -20578,21 +19035,9 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 239.0,
-     "z": 517.0,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 257.0,
      "z": 506.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 256.5,
-     "z": 496.0,
      "level": 0
     },
     {
@@ -20740,15 +19185,15 @@
    "hasShed": false,
    "garrisonDensity": "heavy",
    "composition": {
-    "rusher": 21,
+    "rusher": 9,
     "turret": 5,
-    "bruiser": 7,
-    "blinker": 2,
-    "gunner": 3,
-    "heavy": 6,
-    "launcher": 2,
-    "brute": 2,
-    "bolter": 2
+    "bruiser": 4,
+    "orbital": 2,
+    "heavy": 5,
+    "arcstriker": 1,
+    "blinker": 1,
+    "bolter": 4,
+    "brute": 1
    },
    "surfaces": [
     {
@@ -21048,26 +19493,8 @@
    "garrison": [
     {
      "kind": "rusher",
-     "x": 263.0,
-     "z": 533.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 255.5,
-     "z": 547.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
      "x": 248.5,
      "z": 534.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 262.5,
-     "z": 554.5,
      "level": 0
     },
     {
@@ -21080,18 +19507,6 @@
      "kind": "bruiser",
      "x": 256.5,
      "z": 538.5,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 265.0,
-     "z": 543.0,
-     "level": 0
-    },
-    {
-     "kind": "blinker",
-     "x": 256.0,
-     "z": 549.5,
      "level": 0
     },
     {
@@ -21125,19 +19540,13 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 251.5,
-     "z": 536.0,
-     "level": 0
-    },
-    {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 272.0,
      "z": 539.5,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "orbital",
      "x": 269.5,
      "z": 542.5,
      "level": 0
@@ -21149,31 +19558,13 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 263.0,
-     "z": 552.5,
-     "level": 0
-    },
-    {
      "kind": "heavy",
      "x": 253.5,
      "z": 534.0,
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 253.0,
-     "z": 537.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 261.0,
-     "z": 547.0,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "arcstriker",
      "x": 261.0,
      "z": 553.5,
      "level": 0
@@ -21182,12 +19573,6 @@
      "kind": "blinker",
      "x": 258.5,
      "z": 544.5,
-     "level": 0
-    },
-    {
-     "kind": "brute",
-     "x": 260.0,
-     "z": 556.0,
      "level": 0
     },
     {
@@ -21215,19 +19600,13 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 256.0,
-     "z": 534.0,
-     "level": 0
-    },
-    {
      "kind": "heavy",
      "x": 250.0,
      "z": 540.5,
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "bolter",
      "x": 254.5,
      "z": 537.0,
      "level": 0
@@ -21242,18 +19621,6 @@
      "kind": "bruiser",
      "x": 254.5,
      "z": 542.5,
-     "level": 0
-    },
-    {
-     "kind": "bruiser",
-     "x": 262.0,
-     "z": 556.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 269.0,
-     "z": 541.0,
      "level": 0
     },
     {
@@ -21293,13 +19660,7 @@
      "level": 0
     },
     {
-     "kind": "rusher",
-     "x": 267.0,
-     "z": 547.0,
-     "level": 0
-    },
-    {
-     "kind": "launcher",
+     "kind": "bolter",
      "x": 267.0,
      "z": 540.5,
      "level": 0
@@ -21311,33 +19672,9 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
-     "x": 254.5,
-     "z": 541.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 258.0,
-     "z": 548.5,
-     "level": 0
-    },
-    {
-     "kind": "heavy",
-     "x": 265.0,
-     "z": 540.5,
-     "level": 0
-    },
-    {
      "kind": "rusher",
      "x": 265.0,
      "z": 551.0,
-     "level": 0
-    },
-    {
-     "kind": "rusher",
-     "x": 251.0,
-     "z": 537.5,
      "level": 0
     },
     {

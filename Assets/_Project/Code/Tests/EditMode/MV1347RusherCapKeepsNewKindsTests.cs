@@ -36,7 +36,13 @@ namespace MaxWorlds.Tests.EditMode
                     System.Array.FindAll(all, r => r != null && r.AreaIndex == area && r.Kind == k).Length;
 
                 for (int a = 1; a <= 4; a++)
-                    Assert.AreEqual(1, Count(a, EnemyKind.Orbital), $"a{a} should hold exactly one Orbital");
+                {
+                    // MV-1477: the Reef now authors extra Orbitals in the areas it spreads them through (a3, ...), so
+                    // each area holds exactly the Orbitals its own garrison authors - and at least one.
+                    int authored = System.Array.FindAll(cfg.AreaByIndex(a).garrison, g => g.kind == "orbital").Length;
+                    Assert.GreaterOrEqual(authored, 1, $"a{a} should author an Orbital");
+                    Assert.AreEqual(authored, Count(a, EnemyKind.Orbital), $"a{a} should hold every authored Orbital");
+                }
                 Assert.AreEqual(1, Count(4, EnemyKind.Projector), "a4 should hold its authored Projector");
                 Assert.AreEqual(1, Count(6, EnemyKind.Jammer), "a6 should hold its authored Jammer");
             }

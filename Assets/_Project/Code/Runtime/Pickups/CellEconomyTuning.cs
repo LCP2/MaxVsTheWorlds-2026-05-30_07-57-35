@@ -60,11 +60,11 @@ namespace MaxWorlds.Pickups
         public const int DefaultWorld5CradlePayoutParts = 7;
 
         /// <summary>MV-1455: the City's flat Parts per large kill (<see cref="MaxWorlds.Arena.WorldDefinition.PartsPerLargeKill"/>).
-        /// Calibrated (MV-1455) against <see cref="WorldEconomyModel"/>.</summary>
-        public const float DefaultCityPartsPerLargeKill = 2.3f;
+        /// Calibrated (MV-1455) against <see cref="WorldEconomyModel"/>; re-run after MV-1477's garrison cut (2.3 -> 2.9, a30 = 105% of the full-upgrade cost).</summary>
+        public const float DefaultCityPartsPerLargeKill = 2.9f;
 
-        /// <summary>MV-1462: the Reef's flat Parts per large kill (<see cref="MaxWorlds.Arena.WorldDefinition.PartsPerLargeKill"/>).</summary>
-        public const float DefaultReefPartsPerLargeKill = 0.57f;
+        /// <summary>MV-1462: the Reef's flat Parts per large kill (<see cref="MaxWorlds.Arena.WorldDefinition.PartsPerLargeKill"/>). MV-1477: re-run after the garrison cut (0.57 -> 0.83, a30 = 105% of the full-upgrade cost).</summary>
+        public const float DefaultReefPartsPerLargeKill = 0.83f;
 
         /// <summary>MV-1462: the Reef's rockets per large kill.</summary>
         public const float DefaultReefRocketsPerLargeKill = 0.8f;

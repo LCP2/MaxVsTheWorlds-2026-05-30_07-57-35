@@ -35,52 +35,19 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class MV1292ProjectorJammerPlacementTests
     {
-        private sealed class ExpectedComposition
-        {
-            public int Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker,
-                       Sludger, Charger, Turret, Dreadnought, Skitter, Breaker, Tractor, Welder;
-        }
-
-        // Mothership: same footing as City -- every touched area was already a full, exclusive
-        // composition before this ticket.
-        private static readonly Dictionary<int, ExpectedComposition> MothershipBaseline = new Dictionary<int, ExpectedComposition>
-        {
-            [4] = new ExpectedComposition { Rusher = 7, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 2, Blinker = 2 },
-            [6] = new ExpectedComposition { Rusher = 6, Turret = 3, Gunner = 3, Bruiser = 3, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 3 },
-            [9] = new ExpectedComposition { Rusher = 6, Turret = 3, Gunner = 3, Bruiser = 3, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 3, Brute = 2 },
-            [11] = new ExpectedComposition { Rusher = 5, Turret = 2, Gunner = 3, Bruiser = 3, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 2, Brute = 1 },
-            [14] = new ExpectedComposition { Rusher = 6, Turret = 2, Gunner = 3, Bruiser = 3, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 2, Brute = 2 },
-            [16] = new ExpectedComposition { Rusher = 6, Turret = 3, Gunner = 3, Bruiser = 3, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 3, Brute = 2, Tractor = 2 },
-            [19] = new ExpectedComposition { Rusher = 7, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 3, Brute = 2, Breaker = 1 },
-            // MV-1312 hand-added 1 Welder each to a21/a24/a26 (near each area's own airlock) —
-            // a24 already carried 2, so its own +1 stacks onto that ticket's own total.
-            [21] = new ExpectedComposition { Rusher = 8, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 2, Heavy = 2, Skitter = 3, Brute = 2, Breaker = 2, Welder = 1 },
-            [24] = new ExpectedComposition { Rusher = 8, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 3, Heavy = 3, Skitter = 3, Brute = 2, Breaker = 2, Welder = 3 },
-            [26] = new ExpectedComposition { Rusher = 9, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 3, Heavy = 3, Skitter = 3, Brute = 3, Breaker = 2, Welder = 1 },
-            [29] = new ExpectedComposition { Rusher = 9, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 3, Heavy = 3, Skitter = 3, Brute = 3, Breaker = 2 },
-        };
-
-        // Reef (world3_config.json): every touched area is dial-blended (either it had no
-        // composition authored at all before this ticket, or -- a6/a24 -- it already blended one
-        // authored-only extra kind onto the dial solve). So the base-7 kinds are checked by
-        // re-deriving the dial solve for ALL eleven below, never against a literal baseline; only
-        // a6/a24's own pre-existing Dreadnought needs a literal check, since that one field is
-        // itself authored, not dial-derived.
-        private static readonly Dictionary<int, int> World3DreadnoughtBaseline = new Dictionary<int, int>
-        {
-            [6] = 1,
-            [24] = 1,
-        };
+        // MV-1477: the "every OTHER kind is unchanged from the base commit" baselines (Mothership literal counts, Reef
+        // dial re-derivation) are gone - MV-1477 deliberately cut Worlds 3-5's garrisons (and with them the authored
+        // compositions) by ~30%, so those counts are no longer the MV-1292 base. The placement rules stay.
 
         [Test]
         public void ProjectorAndJammerPlacement_MeetsEveryRule_AcrossReefAndMothership()
         {
             // MV-1430: the City no longer authors a Projector or Jammer (Lee, 23 Nov) - it is not checked here.
-            CheckWorld(WorldLibrary.World3, null, isDialBlended: true);
-            CheckWorld(WorldLibrary.Mothership, MothershipBaseline, isDialBlended: false);
+            CheckWorld(WorldLibrary.World3);
+            CheckWorld(WorldLibrary.Mothership);
         }
 
-        private static void CheckWorld(string worldKey, Dictionary<int, ExpectedComposition> literalBaseline, bool isDialBlended)
+        private static void CheckWorld(string worldKey)
         {
             WorldConfig cfg = WorldLibrary.Load(worldKey);
             Assert.IsNotNull(cfg, $"{worldKey}: must load and pass MapValidation (garrison placements must clear cover/sheds)");
@@ -104,17 +71,6 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsFalse(bossOrFinalIndices.Contains(a.index),
                     $"{worldKey} a{a.index}: never in a boss area or the world's final area");
                 Assert.GreaterOrEqual(a.index, 4, $"{worldKey} a{a.index}: no earlier than area 4");
-
-                if (isDialBlended)
-                {
-                    AssertDialDerivedKindsUnchanged(worldKey, cfg, a.index, solved);
-                    if (World3DreadnoughtBaseline.TryGetValue(a.index, out int expectedDreadnought))
-                        Assert.AreEqual(expectedDreadnought, solved.Dreadnought, $"{worldKey} a{a.index}: Dreadnought count must be unchanged");
-                }
-                else if (literalBaseline.TryGetValue(a.index, out ExpectedComposition expected))
-                {
-                    AssertOtherKindsUnchanged(worldKey, a.index, expected, solved);
-                }
             }
 
             Assert.GreaterOrEqual(projectorAreas.Count, 6, $"{worldKey}: needs at least 6 Projector areas");
@@ -126,53 +82,6 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.LessOrEqual(union[i] - union[i - 1], 6,
                     $"{worldKey}: gap between area {union[i - 1]} and area {union[i]} exceeds 6");
             }
-        }
-
-        private static void AssertOtherKindsUnchanged(string worldKey, int areaIndex, ExpectedComposition expected, DifficultyEngine.Composition actual)
-        {
-            string ctx = $"{worldKey} a{areaIndex}";
-            Assert.AreEqual(expected.Rusher, actual.Rusher, $"{ctx}: Rusher count must be unchanged");
-            Assert.AreEqual(expected.Bruiser, actual.Bruiser, $"{ctx}: Bruiser count must be unchanged");
-            Assert.AreEqual(expected.Heavy, actual.Heavy, $"{ctx}: Heavy count must be unchanged");
-            Assert.AreEqual(expected.Brute, actual.Brute, $"{ctx}: Brute count must be unchanged");
-            Assert.AreEqual(expected.Gunner, actual.Gunner, $"{ctx}: Gunner count must be unchanged");
-            Assert.AreEqual(expected.Launcher, actual.Launcher, $"{ctx}: Launcher count must be unchanged");
-            Assert.AreEqual(expected.Blinker, actual.Blinker, $"{ctx}: Blinker count must be unchanged");
-            Assert.AreEqual(expected.Bolter, actual.Bolter, $"{ctx}: Bolter count must be unchanged");
-            Assert.AreEqual(expected.Lurker, actual.Lurker, $"{ctx}: Lurker count must be unchanged");
-            Assert.AreEqual(expected.Sludger, actual.Sludger, $"{ctx}: Sludger count must be unchanged");
-            Assert.AreEqual(expected.Charger, actual.Charger, $"{ctx}: Charger count must be unchanged");
-            Assert.AreEqual(expected.Turret, actual.Turret, $"{ctx}: Turret count must be unchanged");
-            Assert.AreEqual(expected.Dreadnought, actual.Dreadnought, $"{ctx}: Dreadnought count must be unchanged");
-            Assert.AreEqual(expected.Skitter, actual.Skitter, $"{ctx}: Skitter count must be unchanged");
-            Assert.AreEqual(expected.Breaker, actual.Breaker, $"{ctx}: Breaker count must be unchanged");
-            Assert.AreEqual(expected.Tractor, actual.Tractor, $"{ctx}: Tractor count must be unchanged");
-            Assert.AreEqual(expected.Welder, actual.Welder, $"{ctx}: Welder count must be unchanged");
-        }
-
-        /// <summary>Re-derives the dial-only solve for <paramref name="areaIndex"/> with the exact same
-        /// inputs <see cref="WorldConfig.SolveComposition"/> itself feeds <see cref="DifficultyEngine.SolveComposition"/>,
-        /// then asserts the loaded config's base-7 kinds match it. Only reached for an area this
-        /// ticket authored a brand-new <c>blendWithDial</c> composition onto (no literal baseline
-        /// exists because none was authored before) — if blending had silently been skipped in favour
-        /// of the exclusive-replace branch, every one of these would read back as 0 instead.</summary>
-        private static void AssertDialDerivedKindsUnchanged(string worldKey, WorldConfig cfg, int areaIndex, DifficultyEngine.Composition actual)
-        {
-            WorldDials dials = cfg.dials;
-            float baseThreat = DevTuning.Or(DevTuning.WorldBaseThreat, dials.baseThreat);
-            float threatGrowth = DevTuning.Or(DevTuning.WorldThreatGrowth, dials.threatGrowth);
-            float budget = DifficultyEngine.TargetBudget(areaIndex, baseThreat, threatGrowth, dials.EnginePacing);
-            ToughnessCurve toughness = dials.toughnessCurve?.ToEngineCurve(dials.areaCount);
-            DifficultyEngine.Composition dialSolved = DifficultyEngine.SolveComposition(areaIndex, budget, toughness);
-
-            string ctx = $"{worldKey} a{areaIndex}";
-            Assert.AreEqual(dialSolved.Rusher, actual.Rusher, $"{ctx}: dial-derived Rusher count must survive the blend");
-            Assert.AreEqual(dialSolved.Bruiser, actual.Bruiser, $"{ctx}: dial-derived Bruiser count must survive the blend");
-            Assert.AreEqual(dialSolved.Heavy, actual.Heavy, $"{ctx}: dial-derived Heavy count must survive the blend");
-            Assert.AreEqual(dialSolved.Brute, actual.Brute, $"{ctx}: dial-derived Brute count must survive the blend");
-            Assert.AreEqual(dialSolved.Gunner, actual.Gunner, $"{ctx}: dial-derived Gunner count must survive the blend");
-            Assert.AreEqual(dialSolved.Launcher, actual.Launcher, $"{ctx}: dial-derived Launcher count must survive the blend");
-            Assert.AreEqual(dialSolved.Blinker, actual.Blinker, $"{ctx}: dial-derived Blinker count must survive the blend");
         }
     }
 }
