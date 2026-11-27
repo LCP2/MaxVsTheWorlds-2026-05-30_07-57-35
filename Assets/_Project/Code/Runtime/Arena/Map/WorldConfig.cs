@@ -358,6 +358,11 @@ namespace MaxWorlds.Arena
         public string kind;
         public string displayName;
         public float moveSpeed;
+
+        /// <summary>MV-1475: move speed as a multiple of <see cref="MaxWorlds.Enemies.EnemyArchetype.R"/>
+        /// (the speed-tier unit: FAST 1.7, MEDIUM 1.0, SLOW ~0.5), so a world's speeds can't drift
+        /// off the tiers. Wins over <see cref="moveSpeed"/> when both are set; 0 = not authored.</summary>
+        public float speedR;
         public float maxHealth;
         public float contactDamage;
         public Vector3 bodyScale;

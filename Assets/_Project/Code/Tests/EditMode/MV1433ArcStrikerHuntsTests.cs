@@ -65,11 +65,11 @@ namespace MaxWorlds.Tests.EditMode
                 striker.transform.position = RigOrigin + Vector3.up * EnemyArchetype.Of(EnemyKind.ArcStriker).SpawnHeight;
                 RobotOnEnableMethod.Invoke(striker, null);
 
-                // 1. Max 20 m away (past its 14 m hold): 5 s of ticks closes at least 5 m.
+                // 1. Max 20 m away (past its 14 m hold): 8 s of ticks closes at least 5 m (MV-1475: MEDIUM tier 0.93 m/s).
                 maxGo.transform.position = RigOrigin + new Vector3(20f, 0f, 0f);
                 Physics.SyncTransforms();
                 float far0 = Flat(striker.transform.position, maxGo.transform.position);
-                for (int i = 0; i < Mathf.RoundToInt(5f / Dt); i++) striker.Tick(Dt);
+                for (int i = 0; i < Mathf.RoundToInt(8f / Dt); i++) striker.Tick(Dt);
                 float far1 = Flat(striker.transform.position, maxGo.transform.position);
                 Assert.That(far0 - far1, Is.GreaterThanOrEqualTo(5f), "advancing on Max from 20 m");
 

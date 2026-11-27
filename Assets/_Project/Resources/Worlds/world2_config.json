@@ -91,7 +91,7 @@
     {
       "kind": "rusher",
       "displayName": "SCRAP RAT",
-      "moveSpeed": 2.4,
+      "speedR": 1.7,
       "maxHealth": 28,
       "skin": "stormdrain"
     },

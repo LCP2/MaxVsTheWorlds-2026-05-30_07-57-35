@@ -41,8 +41,9 @@ namespace MaxWorlds.Core
         /// <summary>Max's planar move speed, m/s.</summary>
         public static float? PlayerMoveSpeed { get; set; }
 
-        /// <summary>Robot chase speed, m/s. Applies to live robots and to anything spawned after.</summary>
-        public static float? RobotMoveSpeed { get; set; }
+        /// <summary>MV-1475: robot move-speed MULTIPLIER (x0.5-x2.0, default x1), applied on top of every
+        /// kind's own authored speed. Never replaces it. Applies to live robots and to anything spawned after.</summary>
+        public static float? RobotMoveSpeedMultiplier { get; set; }
 
         /// <summary>Seconds between robot spawns, overriding the whole start→min ramp with one flat
         /// rate. Read live every frame by <see cref="MaxWorlds.Enemies.EnemySpawner.CurrentInterval"/>,
@@ -458,7 +459,7 @@ namespace MaxWorlds.Core
 
         /// <summary>True if any knob has been moved this session. Used by the panel's readout.</summary>
         public static bool AnyOverride =>
-            CameraDistance.HasValue || CameraPitch.HasValue || PlayerMoveSpeed.HasValue || RobotMoveSpeed.HasValue ||
+            CameraDistance.HasValue || CameraPitch.HasValue || PlayerMoveSpeed.HasValue || RobotMoveSpeedMultiplier.HasValue ||
             SpawnInterval.HasValue ||
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
             FactoryHealth.HasValue || BossHealth.HasValue ||
@@ -519,7 +520,7 @@ namespace MaxWorlds.Core
             CameraDistance = null;
             CameraPitch = null;
             PlayerMoveSpeed = null;
-            RobotMoveSpeed = null;
+            RobotMoveSpeedMultiplier = null;
             SpawnInterval = null;
             BossMoveSpeed = null;
             PlayerMaxHealth = null;
@@ -629,6 +630,7 @@ namespace MaxWorlds.Core
         // Distinguishes "never saved" from "saved with every knob back at its authored default" —
         // the latter is a real, deliberate save (e.g. after Reset then Save) and must still load.
         private const string SavedMarkerKey = PrefsPrefix + "Saved";
+        private const string LegacyRobotMoveSpeedKey = PrefsPrefix + "RobotMoveSpeed";   // MV-1475: absolute m/s, retired
 
         /// <summary>Every override paired with its PlayerPrefs key, so Save/Load/Clear share one
         /// loop instead of thirty-three near-identical lines apiece.</summary>
@@ -636,7 +638,7 @@ namespace MaxWorlds.Core
         {
             (PrefsPrefix + nameof(CameraDistance), () => CameraDistance, v => CameraDistance = v),
             (PrefsPrefix + nameof(PlayerMoveSpeed), () => PlayerMoveSpeed, v => PlayerMoveSpeed = v),
-            (PrefsPrefix + nameof(RobotMoveSpeed), () => RobotMoveSpeed, v => RobotMoveSpeed = v),
+            (PrefsPrefix + nameof(RobotMoveSpeedMultiplier), () => RobotMoveSpeedMultiplier, v => RobotMoveSpeedMultiplier = v),
             (PrefsPrefix + nameof(SpawnInterval), () => SpawnInterval, v => SpawnInterval = v),
             (PrefsPrefix + nameof(BossMoveSpeed), () => BossMoveSpeed, v => BossMoveSpeed = v),
             (PrefsPrefix + nameof(PlayerMaxHealth), () => PlayerMaxHealth, v => PlayerMaxHealth = v),
@@ -765,6 +767,9 @@ namespace MaxWorlds.Core
         public static void LoadSaved()
         {
             if (!HasSaved) return;
+            // MV-1475: "DevTuning.RobotMoveSpeed" used to persist ONE absolute m/s that replaced every
+            // kind's speed; it is now a multiplier under a new key, so drop any stale absolute value.
+            PlayerPrefs.DeleteKey(LegacyRobotMoveSpeedKey);
             foreach (var f in Persisted)
                 if (PlayerPrefs.HasKey(f.Key)) f.Set(PlayerPrefs.GetFloat(f.Key));
         }
@@ -774,6 +779,7 @@ namespace MaxWorlds.Core
         public static void ClearSaved()
         {
             foreach (var f in Persisted) PlayerPrefs.DeleteKey(f.Key);
+            PlayerPrefs.DeleteKey(LegacyRobotMoveSpeedKey);
             PlayerPrefs.DeleteKey(SavedMarkerKey);
             PlayerPrefs.Save();
         }

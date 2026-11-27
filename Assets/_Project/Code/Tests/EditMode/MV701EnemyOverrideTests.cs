@@ -24,8 +24,8 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(world2, "world2_config.json failed to load");
 
             EnemyArchetype scrapRat = EnemyArchetype.For(EnemyKind.Rusher, world2);
-            Assert.AreEqual(2.4f, scrapRat.MoveSpeed, 1e-4f,
-                "World 2's rusher override must resolve MoveSpeed 2.4");
+            Assert.AreEqual(EnemyArchetype.FastSpeed, scrapRat.MoveSpeed, 1e-4f,
+                "World 2's rusher override must resolve the FAST tier, 1.7 R (MV-1475; was a raw 2.4)");
             Assert.AreEqual(28f, scrapRat.MaxHealth, 1e-4f,
                 "World 2's rusher override must resolve MaxHealth 28");
             Assert.AreEqual("SCRAP RAT", scrapRat.DisplayName,

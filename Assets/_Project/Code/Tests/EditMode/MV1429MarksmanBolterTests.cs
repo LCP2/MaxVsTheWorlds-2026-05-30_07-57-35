@@ -83,9 +83,9 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(marksman.IsMarksman, "the City bolter override stamps the marksman role");
                 maxGo.transform.position = Origin + new Vector3(20f, 0f, 0f);
                 Physics.SyncTransforms();
-                TickFor(marksman, 3f);
+                TickFor(marksman, 9f);   // MV-1475: MEDIUM tier 0.93 m/s (was 3.5)
                 float d1 = Flat(marksman.transform.position, maxGo.transform.position);
-                Assert.That(d1, Is.InRange(9f, 13f), "20 m away: it closes into the 9-13 m band within 3 s");
+                Assert.That(d1, Is.InRange(9f, 13f), "20 m away: it closes into the 9-13 m band within 9 s");
 
                 // 2. In the band with sight: aim line active 0.6 s +-0.05 before a bolt spawns.
                 Assert.IsNotNull(marksman.Rifle, "the rifle is ticking");
@@ -119,9 +119,9 @@ namespace MaxWorlds.Tests.EditMode
                 // 5. Max at 5 m: after 3 s it is at least 9 m away.
                 maxGo.transform.position = marksman.transform.position + new Vector3(5f, 0f, 0f);
                 Physics.SyncTransforms();
-                TickFor(marksman, 3f);
+                TickFor(marksman, 6f);   // MV-1475: MEDIUM tier
                 Assert.GreaterOrEqual(Flat(marksman.transform.position, maxGo.transform.position), 9f,
-                    "5 m away: it backs off to at least 9 m within 3 s");
+                    "5 m away: it backs off to at least 9 m within 6 s");
 
                 // 6. A World 2 Bolter under the same setup is not a marksman and keeps today's behaviour
                 //    (no rifle, no marksman role).
