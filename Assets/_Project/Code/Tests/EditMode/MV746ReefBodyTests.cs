@@ -99,10 +99,13 @@ namespace MaxWorlds.Tests.EditMode
                     // AC3: collider sizing is untouched — EnemyArchetype.WithOverride never overrides
                     // ColliderHeight/ColliderRadius, so the Reef archetype's own resolved values must
                     // still match World 1's within 0.01m.
+                    // MV-1477: the Reef Bolter is a Marksman now (75% body and collider), so its resolved collider is
+                    // World 1's x 0.75; every other Reef kind still matches World 1's exactly.
+                    float colliderScale = kind == EnemyKind.Bolter ? 0.75f : 1f;
                     EnemyArchetype world1Archetype = EnemyArchetype.Of(kind);
-                    Assert.AreEqual(world1Archetype.ColliderHeight, reefArchetype.ColliderHeight, 0.01f,
+                    Assert.AreEqual(world1Archetype.ColliderHeight * colliderScale, reefArchetype.ColliderHeight, 0.01f,
                         $"{kind}'s Reef collider height must match World 1's within 0.01m");
-                    Assert.AreEqual(world1Archetype.ColliderRadius, reefArchetype.ColliderRadius, 0.01f,
+                    Assert.AreEqual(world1Archetype.ColliderRadius * colliderScale, reefArchetype.ColliderRadius, 0.01f,
                         $"{kind}'s Reef collider radius must match World 1's within 0.01m");
                     var cc = reefGo.GetComponent<CharacterController>();
                     Assert.IsNotNull(cc, $"{kind}'s Reef instance has no CharacterController");

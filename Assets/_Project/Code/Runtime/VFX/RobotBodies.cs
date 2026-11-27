@@ -119,7 +119,7 @@ namespace MaxWorlds.VFX
             Transform breakerChainPivot = null, breakerChainEnd = null, breakerWallAnchor = null;
             Transform crown = null, orbitalHover = null;
             MeshRenderer[] crownTubes = null, crownTips = null;
-            Transform visualRoot = VisualTrimRootFor(kind, root);
+            Transform visualRoot = VisualTrimRootFor(kind, root, skin == MarksmanSkinTag);
 
             if (skin == ReefSkinTag && TryBuildReef(kind, visualRoot, p, eyes, wheels, legs, out inflatable))
                 return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), inflatable);
@@ -283,13 +283,21 @@ namespace MaxWorlds.VFX
         /// the MV-434 body-separation clamp — completely untouched. No other kind is trimmed.</summary>
         private const float HeavyVisualTrim = 0.931f; // measured 1.997m -> ~1.859m, clears Max's 1.9876m by ~6.5%
 
-        private static Transform VisualTrimRootFor(EnemyKind kind, Transform root)
-        {
-            if (kind != EnemyKind.Heavy) return root;
+        /// <summary>MV-1477: the Marksman and the Orbital render at 75% of their MV-1429/MV-1345 size
+        /// (Lee, 27 Nov: smaller, more of them). Their colliders (<see cref="EnemyArchetype"/>) and the
+        /// Marksman's muzzle (<see cref="MarksmanRifle.MuzzleHeight"/>) follow by the same factor.</summary>
+        public const float SmallRangedScale = 0.75f;
 
-            var pivot = new GameObject("HeavyVisualTrim").transform;
+        private static Transform VisualTrimRootFor(EnemyKind kind, Transform root, bool marksman = false)
+        {
+            float scale = kind == EnemyKind.Heavy ? HeavyVisualTrim
+                        : kind == EnemyKind.Orbital || (kind == EnemyKind.Bolter && marksman) ? SmallRangedScale
+                        : 1f;
+            if (scale == 1f) return root;
+
+            var pivot = new GameObject(kind == EnemyKind.Heavy ? "HeavyVisualTrim" : "SmallRangedTrim").transform;
             pivot.SetParent(root, worldPositionStays: false);
-            pivot.localScale = Vector3.one * HeavyVisualTrim;
+            pivot.localScale = Vector3.one * scale;
             return pivot;
         }
 

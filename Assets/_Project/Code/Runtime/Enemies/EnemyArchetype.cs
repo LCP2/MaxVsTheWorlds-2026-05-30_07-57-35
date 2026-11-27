@@ -777,7 +777,7 @@ namespace MaxWorlds.Enemies
         /// </summary>
         public static EnemyArchetype Orbital => new EnemyArchetype(
             EnemyKind.Orbital, EnemyShape.Capsule, new Vector3(0.85f, 0.75f, 0.85f),
-            colliderHeight: 1.45f, colliderRadius: 0.42f,
+            colliderHeight: 1.45f * MaxWorlds.VFX.RobotBodies.SmallRangedScale, colliderRadius: 0.42f * MaxWorlds.VFX.RobotBodies.SmallRangedScale,   // MV-1477: 75%
             moveSpeed: MediumSpeed, maxHealth: 90f,
             contactDamage: 0f, contactRadius: 0.5f,
             lungeRange: 11f, telegraphTime: 0.25f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
@@ -874,6 +874,10 @@ namespace MaxWorlds.Enemies
             return ov == null ? baseArchetype : baseArchetype.WithOverride(ov);
         }
 
+        /// <summary>MV-1477: a Bolter an override stamps as a MARKSMAN collides at 75% (its body is 75%).</summary>
+        private float ColliderScaleFor(MaxWorlds.Arena.WorldEnemyOverride ov) =>
+            Kind == EnemyKind.Bolter && (Marksman || ov.marksman) ? MaxWorlds.VFX.RobotBodies.SmallRangedScale : 1f;
+
         /// <summary>Applies one <see cref="MaxWorlds.Arena.WorldEnemyOverride"/> over this archetype
         /// (MV-701). A zero/empty field on the override means "not authored" — the same idiom
         /// <see cref="MaxWorlds.Arena.WorldConfig.wallHeight"/> already uses — so a world that only
@@ -884,7 +888,7 @@ namespace MaxWorlds.Enemies
         public EnemyArchetype WithOverride(MaxWorlds.Arena.WorldEnemyOverride ov) => new EnemyArchetype(
             Kind, Shape,
             ov.bodyScale != Vector3.zero ? ov.bodyScale : BodyScale,
-            ColliderHeight, ColliderRadius,
+            ColliderHeight * ColliderScaleFor(ov), ColliderRadius * ColliderScaleFor(ov),
             ov.speedR > 0f ? ov.speedR * R : ov.moveSpeed > 0f ? ov.moveSpeed : MoveSpeed,
             ov.maxHealth > 0f ? ov.maxHealth : MaxHealth,
             ov.contactDamage > 0f ? ov.contactDamage : ContactDamage,

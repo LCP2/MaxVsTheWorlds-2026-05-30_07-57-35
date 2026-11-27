@@ -160,7 +160,7 @@ namespace MaxWorlds.Tests.EditMode
                 "56.3 58.25 1.6 0.5"
             }, new[] {
                 "bolter 53.5 75.0 P a4_e",
-                "gunner 46.5 68.0 P a4_e",
+                "orbital 46.5 68.0 P a4_e",   // MV-1477: the a4 gunner is now the City's first Orbital
                 "launcher 50.0 72.0 P a4_n",
                 "arcstriker 60.0 74.5 - a4_n",
                 "bruiser 51.5 79.0 - a4_n",

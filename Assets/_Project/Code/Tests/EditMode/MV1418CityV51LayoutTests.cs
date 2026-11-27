@@ -15,18 +15,19 @@ namespace MaxWorlds.Tests.EditMode
     public sealed class MV1418CityV51LayoutTests
     {
         // area, non-wedge cover, wedges, relays, pylons standing here, garrison, canisters
+        // MV-1477: the garrison column for a6+ holds the post-cut counts (City 918 -> ~640); a2/a3/a5 are untouched.
         private static readonly object[][] Expected =
         {
             new object[] { "a2", 19, 5, 1, 1, 8, 2 },
             new object[] { "a3", 21, 2, 1, 1, 8, 3 },
             new object[] { "a5", 21, 3, 2, 2, 9, 3 },
-            new object[] { "a6", 33, 0, 1, 1, 25, 3 }, // MV-1426: +1 arcstriker at the back wall; MV-1430: -1 cut kind (a welder/jammer/projector)
-            new object[] { "a7", 12, 23, 2, 1, 24, 4 },
-            new object[] { "a8", 39, 0, 3, 4, 42, 4 },
-            new object[] { "a9", 21, 0, 2, 0, 25, 3 },
-            new object[] { "a10", 27, 0, 1, 3, 25, 3 },
-            new object[] { "a11", 120, 12, 2, 2, 35, 3 },
-            new object[] { "a13", 14, 18, 2, 4, 60, 4 },
+            new object[] { "a6", 33, 0, 1, 1, 18, 3 }, // MV-1426: +1 arcstriker at the back wall; MV-1430: -1 cut kind (a welder/jammer/projector)
+            new object[] { "a7", 12, 23, 2, 1, 17, 4 },
+            new object[] { "a8", 39, 0, 3, 4, 28, 4 },
+            new object[] { "a9", 21, 0, 2, 0, 16, 3 },
+            new object[] { "a10", 27, 0, 1, 3, 18, 3 },
+            new object[] { "a11", 120, 12, 2, 2, 24, 3 },
+            new object[] { "a13", 14, 18, 2, 4, 39, 4 },
         };
 
         [Test]
