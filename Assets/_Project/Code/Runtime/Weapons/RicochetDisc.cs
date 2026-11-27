@@ -227,6 +227,7 @@ namespace MaxWorlds.Weapons
                     target.TakeDamage(new DamageInfo(_damage * multiplier, contact.point, _direction,
                         Team.Player, source: DamageSource.PrimaryWeapon));
                     // MV-1451: look only - frazzle from POWER 4, chain lightning from POWER 6.
+                    WeaponPush.Apply(target, _direction, WeaponPush.RicochetHitsPerSecond); // MV-1476
                     if (target is RobotEnemy hitRobot) OnRobotHit(hitRobot);
                 }
 

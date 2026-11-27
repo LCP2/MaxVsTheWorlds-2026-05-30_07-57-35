@@ -490,8 +490,14 @@ namespace MaxWorlds.Combat
                 {
                     Vector3 push = point - origin; push.y = 0f;
                     float sprayKnockback = DevTuning.Or(DevTuning.SprayKnockback, DefaultSprayKnockback);
+                    // MV-1476: scaled by POWER like every other weapon (sqrt: impulse is a velocity,
+                    // displacement goes with its square).
                     if (push.sqrMagnitude > 1e-4f && sprayKnockback > 0f)
-                        kb.ApplyKnockback(push.normalized * sprayKnockback);
+                    {
+                        Vector3 v = push.normalized * sprayKnockback
+                            * Mathf.Sqrt(WeaponPush.PowerMultiplier(WeaponPush.CurrentPowerLevel));
+                        if (comp is RobotEnemy robot) robot.ApplyPush(v); else kb.ApplyKnockback(v);
+                    }
                 }
 
                 // Cosmetic: splash on the target's surface facing the blaster, not at its

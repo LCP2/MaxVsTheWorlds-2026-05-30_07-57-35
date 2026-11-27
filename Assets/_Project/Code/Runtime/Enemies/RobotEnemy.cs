@@ -2631,6 +2631,17 @@ namespace MaxWorlds.Enemies
             _knockback += impulse;
         }
 
+        /// <summary>MV-1476: a weapon push. Same resistances as <see cref="ApplyKnockback(Vector3)"/>
+        /// (Dreadnought/Breaker refuse; per-archetype decay), but a push never STACKS on a live one - the
+        /// stronger of the two wins - so a fast weapon's displacement stays linear in its per-hit size
+        /// instead of compounding when hits overlap.</summary>
+        public void ApplyPush(Vector3 impulse)
+        {
+            if (Current == State.Dead) return;
+            if (Kind == EnemyKind.Dreadnought || Kind == EnemyKind.Breaker) return;
+            if (impulse.sqrMagnitude > _knockback.sqrMagnitude) _knockback = impulse;
+        }
+
         /// <summary>UNDERTOW's cavitation implosion (MV-714): pulls this robot <paramref name="distance"/>
         /// metres toward <paramref name="point"/>, applied instantly rather than decayed like
         /// <see cref="ApplyKnockback(Vector3)"/> — the grouping is the point, so the moved robots need to
