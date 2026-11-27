@@ -548,6 +548,13 @@
     {
       "id": "a1",
       "index": 1,
+   "partsCaches": [
+    {
+     "id": "a1_partscache1",
+     "x": 51.0,
+     "z": 2.0
+    }
+   ],
       "name": "Hangar Bay",
       "role": "normal",
       "origin": {
@@ -790,6 +797,13 @@
     {
       "id": "a2",
       "index": 2,
+   "partsCaches": [
+    {
+     "id": "a2_partscache1",
+     "x": 26.0,
+     "z": 54.0
+    }
+   ],
       "name": "Pod Racks A",
       "role": "normal",
       "origin": {
@@ -983,6 +997,13 @@
     {
       "id": "a3",
       "index": 3,
+   "partsCaches": [
+    {
+     "id": "a3_partscache1",
+     "x": 102.0,
+     "z": 40.0
+    }
+   ],
       "name": "Hangar Spine",
       "role": "normal",
       "origin": {
@@ -1133,6 +1154,13 @@
     {
       "id": "a4",
       "index": 4,
+   "partsCaches": [
+    {
+     "id": "a4_partscache1",
+     "x": 83.5,
+     "z": 92.0
+    }
+   ],
       "name": "Fuel Junction",
       "role": "normal",
       "origin": {
@@ -1353,6 +1381,13 @@
     {
       "id": "a5",
       "index": 5,
+   "partsCaches": [
+    {
+     "id": "a5_partscache1",
+     "x": 148.0,
+     "z": 66.0
+    }
+   ],
       "name": "Cargo Bay A",
       "role": "normal",
       "origin": {
@@ -1661,6 +1696,13 @@
     {
       "id": "a6",
       "index": 6,
+   "partsCaches": [
+    {
+     "id": "a6_partscache1",
+     "x": 114.0,
+     "z": 126.0
+    }
+   ],
       "name": "Parts Store",
       "role": "normal",
       "origin": {
@@ -1994,6 +2036,13 @@
     {
       "id": "a7",
       "index": 7,
+   "partsCaches": [
+    {
+     "id": "a7_partscache1",
+     "x": 192.0,
+     "z": 116.0
+    }
+   ],
       "name": "Assembly Spine",
       "role": "normal",
       "origin": {
@@ -2175,6 +2224,13 @@
     {
       "id": "a8",
       "index": 8,
+   "partsCaches": [
+    {
+     "id": "a8_partscache1",
+     "x": 147.0,
+     "z": 162.0
+    }
+   ],
       "name": "Assembly Line",
       "role": "normal",
       "origin": {
@@ -2449,6 +2505,13 @@
     {
       "id": "a9",
       "index": 9,
+   "partsCaches": [
+    {
+     "id": "a9_partscache1",
+     "x": 239.0,
+     "z": 142.0
+    }
+   ],
       "name": "Pod Racks B",
       "role": "normal",
       "origin": {
@@ -2729,6 +2792,13 @@
     {
       "id": "a10",
       "index": 10,
+   "partsCaches": [
+    {
+     "id": "a10_partscache1",
+     "x": 232.0,
+     "z": 188.0
+    }
+   ],
       "name": "Vent Hall A",
       "role": "normal",
       "origin": {
@@ -2966,6 +3036,13 @@
     {
       "id": "a11",
       "index": 11,
+   "partsCaches": [
+    {
+     "id": "a11_partscache1",
+     "x": 281.0,
+     "z": 165.0
+    }
+   ],
       "name": "Crew Quarters A",
       "role": "normal",
       "origin": {
@@ -3278,6 +3355,13 @@
     {
       "id": "a12",
       "index": 12,
+   "partsCaches": [
+    {
+     "id": "a12_partscache1",
+     "x": 258.5,
+     "z": 227.0
+    }
+   ],
       "name": "Weld Shop",
       "role": "normal",
       "origin": {
@@ -3535,6 +3619,13 @@
     {
       "id": "a13",
       "index": 13,
+   "partsCaches": [
+    {
+     "id": "a13_partscache1",
+     "x": 323.0,
+     "z": 199.0
+    }
+   ],
       "name": "Cargo Bay B",
       "role": "normal",
       "origin": {
@@ -3869,6 +3960,13 @@
     {
       "id": "a14",
       "index": 14,
+   "partsCaches": [
+    {
+     "id": "a14_partscache1",
+     "x": 289.0,
+     "z": 249.0
+    }
+   ],
       "name": "Hold Spine",
       "role": "normal",
       "origin": {
@@ -4059,6 +4157,13 @@
     {
       "id": "a15",
       "index": 15,
+   "partsCaches": [
+    {
+     "id": "a15_partscache1",
+     "x": 365.0,
+     "z": 221.0
+    }
+   ],
       "name": "Specimen Vault",
       "role": "normal",
       "origin": {
@@ -4386,6 +4491,13 @@
     {
       "id": "a16",
       "index": 16,
+   "partsCaches": [
+    {
+     "id": "a16_partscache1",
+     "x": 350.5,
+     "z": 291.0
+    }
+   ],
       "name": "Crew Quarters B",
       "role": "normal",
       "origin": {
@@ -4723,6 +4835,13 @@
     {
       "id": "a17",
       "index": 17,
+   "partsCaches": [
+    {
+     "id": "a17_partscache1",
+     "x": 417.0,
+     "z": 269.0
+    }
+   ],
       "name": "Pod Racks C",
       "role": "normal",
       "origin": {
@@ -5002,6 +5121,13 @@
     {
       "id": "a18",
       "index": 18,
+   "partsCaches": [
+    {
+     "id": "a18_partscache1",
+     "x": 397.0,
+     "z": 331.0
+    }
+   ],
       "name": "Cross Junction",
       "role": "normal",
       "origin": {
@@ -5258,6 +5384,13 @@
     {
       "id": "a19",
       "index": 19,
+   "partsCaches": [
+    {
+     "id": "a19_partscache1",
+     "x": 465.0,
+     "z": 311.0
+    }
+   ],
       "name": "Vent Hall B",
       "role": "normal",
       "origin": {
@@ -5532,6 +5665,13 @@
     {
       "id": "a20",
       "index": 20,
+   "partsCaches": [
+    {
+     "id": "a20_partscache1",
+     "x": 427.0,
+     "z": 355.0
+    }
+   ],
       "name": "Coolant Spine",
       "role": "normal",
       "origin": {
@@ -5745,6 +5885,13 @@
     {
       "id": "a21",
       "index": 21,
+   "partsCaches": [
+    {
+     "id": "a21_partscache1",
+     "x": 507.0,
+     "z": 331.0
+    }
+   ],
       "name": "Cargo Bay C",
       "role": "normal",
       "origin": {
@@ -6120,6 +6267,13 @@
     {
       "id": "a22",
       "index": 22,
+   "partsCaches": [
+    {
+     "id": "a22_partscache1",
+     "x": 478.5,
+     "z": 409.0
+    }
+   ],
       "name": "Reactor Ring",
       "role": "normal",
       "origin": {
@@ -6502,6 +6656,13 @@
     {
       "id": "a23",
       "index": 23,
+   "partsCaches": [
+    {
+     "id": "a23_partscache1",
+     "x": 557.0,
+     "z": 391.5
+    }
+   ],
       "name": "Vent Hall C",
       "role": "normal",
       "origin": {
@@ -6790,6 +6951,13 @@
     {
       "id": "a24",
       "index": 24,
+   "partsCaches": [
+    {
+     "id": "a24_partscache1",
+     "x": 531.0,
+     "z": 451.0
+    }
+   ],
       "name": "Engine Junction",
       "role": "normal",
       "origin": {
@@ -7109,6 +7277,13 @@
     {
       "id": "a25",
       "index": 25,
+   "partsCaches": [
+    {
+     "id": "a25_partscache1",
+     "x": 599.0,
+     "z": 425.0
+    }
+   ],
       "name": "Crew Quarters C",
       "role": "normal",
       "origin": {
@@ -7447,6 +7622,13 @@
     {
       "id": "a26",
       "index": 26,
+   "partsCaches": [
+    {
+     "id": "a26_partscache1",
+     "x": 559.0,
+     "z": 481.0
+    }
+   ],
       "name": "Pod Racks D",
       "role": "normal",
       "origin": {
@@ -7786,6 +7968,13 @@
     {
       "id": "a27",
       "index": 27,
+   "partsCaches": [
+    {
+     "id": "a27_partscache1",
+     "x": 645.0,
+     "z": 453.0
+    }
+   ],
       "name": "Cargo Bay D",
       "role": "normal",
       "origin": {
@@ -8178,6 +8367,13 @@
     {
       "id": "a28",
       "index": 28,
+   "partsCaches": [
+    {
+     "id": "a28_partscache1",
+     "x": 609.0,
+     "z": 513.0
+    }
+   ],
       "name": "Vent Hall D",
       "role": "normal",
       "origin": {
@@ -8477,6 +8673,13 @@
     {
       "id": "a29",
       "index": 29,
+   "partsCaches": [
+    {
+     "id": "a29_partscache1",
+     "x": 695.0,
+     "z": 495.0
+    }
+   ],
       "name": "Command Spine",
       "role": "normal",
       "origin": {
@@ -8727,6 +8930,13 @@
     {
       "id": "a30",
       "index": 30,
+   "partsCaches": [
+    {
+     "id": "a30_partscache1",
+     "x": 657.0,
+     "z": 555.0
+    }
+   ],
       "name": "The Bridge",
       "role": "boss+exit",
       "origin": {

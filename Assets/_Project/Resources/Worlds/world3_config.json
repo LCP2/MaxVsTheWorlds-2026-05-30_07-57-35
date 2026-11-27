@@ -730,6 +730,13 @@
   {
    "id": "a1",
    "index": 1,
+   "partsCaches": [
+    {
+     "id": "a1_partscache1",
+     "x": 26.0,
+     "z": 51.0
+    }
+   ],
    "name": "Cargo Elevator Bay",
    "role": "normal",
    "origin": {
@@ -1139,6 +1146,13 @@
   {
    "id": "a2",
    "index": 2,
+   "partsCaches": [
+    {
+     "id": "a2_partscache1",
+     "x": 10.0,
+     "z": 10.5
+    }
+   ],
    "name": "Flooded Companionway",
    "role": "normal",
    "origin": {
@@ -1586,6 +1600,13 @@
   {
    "id": "a3",
    "index": 3,
+   "partsCaches": [
+    {
+     "id": "a3_partscache1",
+     "x": 48.5,
+     "z": 2.0
+    }
+   ],
    "name": "Reactor Junction",
    "role": "normal",
    "origin": {
@@ -1903,6 +1924,13 @@
   {
    "id": "a4",
    "index": 4,
+   "partsCaches": [
+    {
+     "id": "a4_partscache1",
+     "x": 80.5,
+     "z": 2.0
+    }
+   ],
    "name": "Upper Cable Run",
    "role": "normal",
    "origin": {
@@ -2227,6 +2255,13 @@
   {
    "id": "a5",
    "index": 5,
+   "partsCaches": [
+    {
+     "id": "a5_partscache1",
+     "x": 112.0,
+     "z": 26.0
+    }
+   ],
    "name": "Bilge Access",
    "role": "normal",
    "origin": {
@@ -2553,6 +2588,13 @@
   {
    "id": "a6",
    "index": 6,
+   "partsCaches": [
+    {
+     "id": "a6_partscache1",
+     "x": 145.5,
+     "z": 22.5
+    }
+   ],
    "name": "Manifold Convergence",
    "role": "normal",
    "origin": {
@@ -2965,6 +3007,13 @@
   {
    "id": "a7",
    "index": 7,
+   "partsCaches": [
+    {
+     "id": "a7_partscache1",
+     "x": 194.5,
+     "z": 12.5
+    }
+   ],
    "name": "Coral-Choked Hold",
    "role": "normal",
    "origin": {
@@ -3414,6 +3463,13 @@
   {
    "id": "a8",
    "index": 8,
+   "partsCaches": [
+    {
+     "id": "a8_partscache1",
+     "x": 198.0,
+     "z": 58.0
+    }
+   ],
    "name": "Ballast Chamber",
    "role": "normal",
    "origin": {
@@ -4133,6 +4189,13 @@
   {
    "id": "a9",
    "index": 9,
+   "partsCaches": [
+    {
+     "id": "a9_partscache1",
+     "x": 198.0,
+     "z": 92.5
+    }
+   ],
    "name": "Crushed Container Stack",
    "role": "normal",
    "origin": {
@@ -4465,6 +4528,13 @@
   {
    "id": "a10",
    "index": 10,
+   "partsCaches": [
+    {
+     "id": "a10_partscache1",
+     "x": 194.0,
+     "z": 126.5
+    }
+   ],
    "name": "Drowned Mess Hall",
    "role": "normal",
    "origin": {
@@ -4941,6 +5011,13 @@
   {
    "id": "a11",
    "index": 11,
+   "partsCaches": [
+    {
+     "id": "a11_partscache1",
+     "x": 155.5,
+     "z": 102.0
+    }
+   ],
    "name": "Salvage Winch Room",
    "role": "normal",
    "origin": {
@@ -5306,6 +5383,13 @@
   {
    "id": "a12",
    "index": 12,
+   "partsCaches": [
+    {
+     "id": "a12_partscache1",
+     "x": 104.5,
+     "z": 102.0
+    }
+   ],
    "name": "Pressure Lock Antechamber",
    "role": "normal",
    "origin": {
@@ -5674,6 +5758,13 @@
   {
    "id": "a13",
    "index": 13,
+   "partsCaches": [
+    {
+     "id": "a13_partscache1",
+     "x": 33.5,
+     "z": 140.0
+    }
+   ],
    "name": "Turbine Junction",
    "role": "normal",
    "origin": {
@@ -6169,6 +6260,13 @@
   {
    "id": "a14",
    "index": 14,
+   "partsCaches": [
+    {
+     "id": "a14_partscache1",
+     "x": 73.0,
+     "z": 67.5
+    }
+   ],
    "name": "Reactor Core Gallery",
    "role": "normal",
    "origin": {
@@ -7192,6 +7290,13 @@
   {
    "id": "a16",
    "index": 16,
+   "partsCaches": [
+    {
+     "id": "a16_partscache1",
+     "x": 157.5,
+     "z": 64.5
+    }
+   ],
    "name": "Keel Crawlspace",
    "role": "normal",
    "origin": {
@@ -7656,6 +7761,13 @@
   {
    "id": "a17",
    "index": 17,
+   "partsCaches": [
+    {
+     "id": "a17_partscache1",
+     "x": 156.5,
+     "z": 30.0
+    }
+   ],
    "name": "Coolant Confluence",
    "role": "normal",
    "origin": {
@@ -8118,6 +8230,13 @@
   {
    "id": "a18",
    "index": 18,
+   "partsCaches": [
+    {
+     "id": "a18_partscache1",
+     "x": 107.0,
+     "z": 41.5
+    }
+   ],
    "name": "Spare Parts Locker",
    "role": "normal",
    "origin": {
@@ -8630,6 +8749,13 @@
   {
    "id": "a19",
    "index": 19,
+   "partsCaches": [
+    {
+     "id": "a19_partscache1",
+     "x": 86.5,
+     "z": 54.0
+    }
+   ],
    "name": "Flooded Officers' Quarters",
    "role": "normal",
    "origin": {
@@ -8939,6 +9065,13 @@
   {
    "id": "a20",
    "index": 20,
+   "partsCaches": [
+    {
+     "id": "a20_partscache1",
+     "x": 37.0,
+     "z": 33.0
+    }
+   ],
    "name": "Hull Breach Junction",
    "role": "normal",
    "origin": {
@@ -9504,6 +9637,13 @@
   {
    "id": "a21",
    "index": 21,
+   "partsCaches": [
+    {
+     "id": "a21_partscache1",
+     "x": 54.0,
+     "z": 63.5
+    }
+   ],
    "name": "Sonar Array Deck",
    "role": "normal",
    "origin": {
@@ -10011,6 +10151,13 @@
   {
    "id": "a22",
    "index": 22,
+   "partsCaches": [
+    {
+     "id": "a22_partscache1",
+     "x": 25.0,
+     "z": 87.0
+    }
+   ],
    "name": "Rusted Fuel Bunker",
    "role": "normal",
    "origin": {
@@ -10539,6 +10686,13 @@
   {
    "id": "a23",
    "index": 23,
+   "partsCaches": [
+    {
+     "id": "a23_partscache1",
+     "x": 2.0,
+     "z": 126.5
+    }
+   ],
    "name": "Bulkhead Confluence",
    "role": "normal",
    "origin": {
@@ -11099,6 +11253,13 @@
   {
    "id": "a24",
    "index": 24,
+   "partsCaches": [
+    {
+     "id": "a24_partscache1",
+     "x": 10.5,
+     "z": 159.5
+    }
+   ],
    "name": "Reef-Grown Cargo Hold",
    "role": "normal",
    "origin": {
@@ -11784,6 +11945,13 @@
   {
    "id": "a25",
    "index": 25,
+   "partsCaches": [
+    {
+     "id": "a25_partscache1",
+     "x": 38.5,
+     "z": 168.5
+    }
+   ],
    "name": "Sealed Escape Trunk",
    "role": "normal",
    "origin": {
@@ -12605,6 +12773,13 @@
   {
    "id": "a27",
    "index": 27,
+   "partsCaches": [
+    {
+     "id": "a27_partscache1",
+     "x": 157.0,
+     "z": 174.0
+    }
+   ],
    "name": "Barnacle Reactor Bay",
    "role": "normal",
    "origin": {
@@ -13283,6 +13458,13 @@
   {
    "id": "a28",
    "index": 28,
+   "partsCaches": [
+    {
+     "id": "a28_partscache1",
+     "x": 190.0,
+     "z": 161.0
+    }
+   ],
    "name": "Collapsed Galley",
    "role": "normal",
    "origin": {
@@ -14188,6 +14370,13 @@
   {
    "id": "a29",
    "index": 29,
+   "partsCaches": [
+    {
+     "id": "a29_partscache1",
+     "x": 219.0,
+     "z": 163.0
+    }
+   ],
    "name": "Final Pressure Lock",
    "role": "normal",
    "origin": {
