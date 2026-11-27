@@ -455,6 +455,11 @@ namespace MaxWorlds.UI
                 if (entity != null && entity.Kind == EntityKind.Pylon && PylonIsAlive(entity))
                     AddPylonDotMarker(entity);
 
+            // MV-1478: a cyan marker for every UNSEALED Parts Cache (SEALED ones are not worth a trip yet; opened ones are done).
+            foreach (MapEntity entity in _map.entities)
+                if (entity != null && entity.Kind == EntityKind.PartsCache && CacheIsUnsealed(entity))
+                    AddCacheDotMarker(entity);
+
             // Area index + name labels (item 8) — anchored to each room's own bottom-left corner (item
             // 3): the top-left is where cover clusters, and drawn last so a label is never buried under
             // a shed or boss glow that happens to sit near it.
@@ -620,6 +625,24 @@ namespace MaxWorlds.UI
             dot.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
             dot.rectTransform.sizeDelta = new Vector2(MapScreenDesign.PylonDotSize, MapScreenDesign.PylonDotSize);
             dot.raycastTarget = false;
+        }
+
+        private void AddCacheDotMarker(MapEntity entity)
+        {
+            var dot = AddImage(_content, HudTextures.Disc(16), MapScreenDesign.CacheDot, "PartsCache");
+            Anchor(dot.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+            dot.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
+            dot.rectTransform.sizeDelta = new Vector2(MapScreenDesign.CacheDotSize, MapScreenDesign.CacheDotSize);
+            dot.raycastTarget = false;
+        }
+
+        /// <summary>MV-1478: true only while the cache built for this entity is UNSEALED (waiting to be shot open).</summary>
+        private bool CacheIsUnsealed(MapEntity entity)
+        {
+            if (_backyardPath == null) return false;
+            if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return false;
+            var cache = go.GetComponent<PartsCache>();
+            return cache != null && cache.State == PartsCache.CacheState.Unsealed;
         }
 
         /// <summary>Resolves a pylon entity's live/destroyed state off the actual built <see cref="Pylon"/>

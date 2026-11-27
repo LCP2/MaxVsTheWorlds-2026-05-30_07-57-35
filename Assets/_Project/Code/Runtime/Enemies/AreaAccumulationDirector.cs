@@ -270,6 +270,14 @@ namespace MaxWorlds.Enemies
             return count;
         }
 
+        /// <summary>MV-1478: true once <paramref name="areaIndex"/>'s population has been queued/placed (its gate has opened or
+        /// the area before it was entered) - before that the area holds no robots yet, and a Parts Cache must not read that as
+        /// "cleared".</summary>
+        public bool IsAreaFilled(int areaIndex) => _filledAreas.Contains(areaIndex);
+
+        /// <summary>MV-1478: robots still queued (not yet on the field) for <paramref name="areaIndex"/>.</summary>
+        public int QueuedForArea(int areaIndex) => _queue?.QueuedForArea(areaIndex) ?? 0;
+
         /// <summary>Drops everything still queued (not yet released) for <paramref name="areaIndex"/>
         /// without touching anything already active (MV-1078) — what a world's finale clean-up calls on
         /// its own final area the instant the Weapon Core is collected, so a shed/Replicator's own

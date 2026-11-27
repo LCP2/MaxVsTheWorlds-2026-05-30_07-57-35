@@ -708,6 +708,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1429MarksmanBolter());
             Add(BuildMv1435MarksmanWheels());
             Add(BuildMv1448RocketCrate());
+            Add(BuildMv1478PartsCache());
             Add(BuildMv1470CityReefCorridor());
             Add(BuildCityReefCorridorPreset("MV-1473", "mv1473cityreefv2", "-mv1473shot", new[] { 0.15f, 0.50f, 0.85f },
                 new[] { "MV-1473-1-street-15pct", "MV-1473-2-quay-50pct", "MV-1473-3-gantry-85pct" }));
@@ -3042,6 +3043,93 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = shots,
+            };
+        }
+
+        /// <summary>MV-1478 AC7: ONE capture of City a1's Parts Cache in each of its four states - SEALED, UNSEALED, a lock
+        /// broken, BURST - taken in one run (no capture loop). Run via <c>cc-mv1478-capture.bat</c>; writes
+        /// <c>Logs/MV-1478-1-sealed.png</c> ... <c>Logs/MV-1478-4-burst.png</c>. The states are forced through the cache's own
+        /// checkpoint-restore and damage entry points, so the shots show the real pod, not a mock.</summary>
+        private static CapturePreset BuildMv1478PartsCache()
+        {
+            PartsCache cache = null;
+
+            IEnumerator Wait(float seconds)
+            {
+                float until = Time.time + seconds;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                foreach (PartsCache c in PartsCache.All) if (c != null && c.Id == "a1_partscache1") cache = c;
+                if (cache == null) throw new CaptureAbortException("MV-1478: City a1 has no Parts Cache");
+
+                Vector3 at = cache.transform.position + Vector3.up * 0.8f;
+                float pitch = 60f, distance = 8.5f;   // the play camera's own pitch, pulled in so the pod and its label are legible
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) { pitch = fixedRig.Pitch; fixedRig.enabled = false; }
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(at - rot * Vector3.forward * distance, rot);
+                yield return Wait(0.5f);
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            IEnumerator Sealed(Camera cam) { yield return Wait(0.3f); }
+
+            IEnumerator Unsealed(Camera cam)
+            {
+                PartsCache.ApplyCheckpointStates(null, new[] { cache.Id });
+                yield return Wait(0.5f);
+            }
+
+            IEnumerator OneLockBroken(Camera cam)
+            {
+                cache.TakeDamage(new DamageInfo(cache.MaxHealth * 0.34f, cache.transform.position, Vector3.forward, Team.Player));
+                yield return Wait(0.6f);
+            }
+
+            IEnumerator Burst(Camera cam)
+            {
+                cache.TakeDamage(new DamageInfo(cache.MaxHealth, cache.transform.position, Vector3.forward, Team.Player));
+                yield return Wait(0.2f);
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1478partscache",
+                LogTag = "[MV1478Capture]",
+                Flag = "-mv1478shot",
+                ArmFile = "Temp/mv1478.arm",
+                HeadlessMarker = "Temp/mv1478.headless",
+                DoneFileName = "_mv1478_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = true,
+                QualityLevelName = "Mobile",
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1478-1-sealed", Sealed),
+                    new CaptureShot("MV-1478-2-unsealed", Unsealed),
+                    new CaptureShot("MV-1478-3-locks", OneLockBroken),
+                    new CaptureShot("MV-1478-4-burst", Burst),
+                },
             };
         }
 

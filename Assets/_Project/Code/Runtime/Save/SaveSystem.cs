@@ -328,6 +328,8 @@ namespace MaxWorlds.Save
             data.CheckpointFoundSecretIds = SecretCensus.FoundIds();
             data.CheckpointCollectedRocketCrateIds = RocketCrateCensus.CollectedIds();   // MV-1448
             data.CheckpointOpenedVaultIds = Vault.OpenedIds();
+            data.CheckpointOpenedPartsCacheIds = PartsCache.OpenedIds();       // MV-1478
+            data.CheckpointUnsealedPartsCacheIds = PartsCache.UnsealedIds();   // MV-1478
             data.CheckpointHeldVaultKeyId = VaultKeyState.HeldVaultId ?? "";
 
             // MV-1129: the live finale gate's own resolved state, if this world has reached one yet --
@@ -422,6 +424,7 @@ namespace MaxWorlds.Save
             ChallengePad.ApplyCheckpointFailedIds(data.CheckpointFailedChallengeIds);
             RepairBay.ApplyCheckpointUsedIds(data.CheckpointUsedRepairBayIds);
             Vault.ApplyCheckpointOpenedIds(data.CheckpointOpenedVaultIds);
+            PartsCache.ApplyCheckpointStates(data.CheckpointOpenedPartsCacheIds, data.CheckpointUnsealedPartsCacheIds);   // MV-1478
             VaultKeyState.Restore(data.CheckpointHeldVaultKeyId);
 
             // MV-951: the mirror of the capture-side write above — AbilityCreditBank/UpgradeState/
@@ -566,6 +569,8 @@ namespace MaxWorlds.Save
             data.CheckpointFailedChallengeIds = Array.Empty<string>();
             data.CheckpointUsedRepairBayIds = Array.Empty<string>();
             data.CheckpointOpenedVaultIds = Array.Empty<string>();
+            data.CheckpointOpenedPartsCacheIds = Array.Empty<string>();     // MV-1478
+            data.CheckpointUnsealedPartsCacheIds = Array.Empty<string>();   // MV-1478
             data.CheckpointHeldVaultKeyId = "";
             data.CheckpointFinaleWeaponGranted = false;
             data.CheckpointFinaleExitOpen = false;

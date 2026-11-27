@@ -69,6 +69,9 @@ namespace MaxWorlds.Audio
 
             // MV-1444: the RIG's own looping electrical hum - appended, never inserted.
             RigHum,
+
+            // MV-1478: a Parts Cache's shield shatters - appended, never inserted.
+            CacheUnsealed,
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -122,6 +125,7 @@ namespace MaxWorlds.Audio
             { Cue.CanisterExplosion, "Canister explosion" },
             { Cue.ArcStrikeCrack, "Arc strike crack" },
             { Cue.RigHum, "RIG hum" },
+            { Cue.CacheUnsealed, "Parts Cache unsealed" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -169,6 +173,7 @@ namespace MaxWorlds.Audio
             { Cue.ShieldBlocked, 8 },
             { Cue.CanisterExplosion, 6 },
             { Cue.ArcStrikeCrack, 6 },
+            { Cue.CacheUnsealed, 4 },
         };
 
         private static SfxPreset P(SfxWaveform wf, float freq = 0f, float slide = 0f,
@@ -464,6 +469,13 @@ namespace MaxWorlds.Audio
                 P(SfxWaveform.Noise, attack: 0.001f, sustain: 0.01f, decay: 0.05f, lowPass: 6000f, volume: 1f, seed: 19),
                 P(SfxWaveform.Sine, freq: 48f, slide: -12f, attack: 0.003f, sustain: 0.1f, decay: 0.45f, volume: 1f),
                 P(SfxWaveform.Noise, attack: 0.02f, sustain: 0.05f, decay: 0.75f, lowPass: 220f, volume: 0.9f, seed: 20),
+            },
+
+            // MV-1478: fallback only (the generated clips replace it) - a glassy snap, then a bright rising chime.
+            [Cue.CacheUnsealed] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.001f, sustain: 0.01f, decay: 0.12f, lowPass: 8000f, volume: 0.7f, seed: 41),
+                P(SfxWaveform.Sine, freq: 880f, slide: 440f, attack: 0.01f, sustain: 0.1f, decay: 0.5f, volume: 0.6f),
             },
 
             // MV-1426: a short, bright crack - a high noise snap over a fast falling square zap.

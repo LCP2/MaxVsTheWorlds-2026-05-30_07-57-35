@@ -232,6 +232,10 @@ namespace MaxWorlds.UI
         /// <see cref="MaxWorlds.VFX.AmbienceVfx"/>.</summary>
         public static event Action<Vector3> CanisterDetonated;
 
+        /// <summary>MV-1478: a Parts Cache's shield just shattered (its area was cleared).</summary>
+        public static event Action<Vector3> PartsCacheUnsealed;
+        public static void EmitPartsCacheUnsealed(Vector3 worldPos) => PartsCacheUnsealed?.Invoke(worldPos);
+
         /// <summary>MV-1426: an ARC STRIKER's lightning column landed at this ground point (the crack cue).</summary>
         public static event Action<Vector3> ArcStrikeLanded;
 

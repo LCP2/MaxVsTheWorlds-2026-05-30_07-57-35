@@ -268,6 +268,12 @@ namespace MaxWorlds.Save
         /// matching id, so a resume never places a second cache (one open per vault).</summary>
         public string[] CheckpointOpenedVaultIds = Array.Empty<string>();
 
+        /// <summary>Stable ids (<c>PartsCache.Id</c>) of every Parts Cache already OPENED when this checkpoint was captured
+        /// (MV-1478) - restored as inert shells that never pay again - and of every one UNSEALED but not yet opened
+        /// (a cache never re-seals, even though a resume rebuilds the area's robots).</summary>
+        public string[] CheckpointOpenedPartsCacheIds = Array.Empty<string>();
+        public string[] CheckpointUnsealedPartsCacheIds = Array.Empty<string>();
+
         /// <summary>The vault id of a collected-but-unused VaultKey by the time this checkpoint was
         /// captured (MV-1321), or empty if none is held — the persisted twin of
         /// <see cref="MaxWorlds.Factories.VaultKeyState.HeldVaultId"/>, same reasoning as

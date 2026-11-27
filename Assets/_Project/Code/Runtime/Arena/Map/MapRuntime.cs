@@ -42,6 +42,9 @@ namespace MaxWorlds.Arena
         /// <summary>The repair bays this map built (MV-1319), in the order it authored them.</summary>
         public readonly List<RepairBay> RepairBays = new List<RepairBay>(4);
 
+        /// <summary>The Parts Caches this map built (MV-1478), in the order it authored them.</summary>
+        public readonly List<PartsCache> PartsCaches = new List<PartsCache>(4);
+
         /// <summary>The vaults this map built (MV-1321), in the order it authored them.</summary>
         public readonly List<Vault> Vaults = new List<Vault>(2);
 
@@ -1409,6 +1412,7 @@ namespace MaxWorlds.Arena
             // MV-1321: same reasoning again — a level loaded a second time must count its own vaults,
             // not the previous level's (or the previous test's) ghosts.
             Vault.ResetRegistry();
+            PartsCache.ResetRegistry();   // MV-1478
 
             // MV-829: a fresh level starts with no area-entered history — see AreaVisitCensus's own
             // doc comment for why "the last level's (or the last test's) areas" can never be trusted.
@@ -2671,6 +2675,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.Vault:
                         built.Vaults.Add(BuildVault(map, e, root, built, rendererZones));
                         break;
+
+                    case EntityKind.PartsCache:
+                        built.PartsCaches.Add(BuildPartsCache(map, e, root, built, rendererZones));
+                        break;
                 }
             }
         }
@@ -2898,6 +2906,29 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return replicator;
+        }
+
+        /// <summary>
+        /// A Parts Cache, from data (MV-1478) - the built cube is the solid collider (it blocks Max and shots like cover);
+        /// <see cref="PartsCache"/> hides it and dresses the pod. Its area is the zone it stands in.
+        /// </summary>
+        private static PartsCache BuildPartsCache(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
+            MarkDiscoverable(body);
+
+            MapZone zone = map.ZoneAt(e.x, e.z);
+            int areaIndex = zone != null ? AreaAccumulationDirector.AreaIndexOf(zone.id) : 0;
+
+            var cache = body.AddComponent<PartsCache>();
+            cache.Configure(e.id, e.worldIndex, areaIndex);
+            cache.Build();   // Awake does not run on AddComponent outside Play mode
+
+            TagStatic(map, body, rendererZones);
+
+            built.Actors[e.id] = body;
+            return cache;
         }
 
         /// <summary>

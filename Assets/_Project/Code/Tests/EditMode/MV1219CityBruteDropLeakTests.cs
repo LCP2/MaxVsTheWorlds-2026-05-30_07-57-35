@@ -69,12 +69,10 @@ namespace MaxWorlds.Tests.EditMode
             foreach (Pickup p in Object.FindObjectsByType<Pickup>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
                 if (p.Kind == PickupKind.PowerCell) powerCells++;
 
-            // MV-1455: the City pays a flat per-kill rate now (WorldDefinition.PartsPerLargeKill), so the first
-            // kill's roll is floor(rate) - not the old no-area-context fallback of 1. The leak this guards would
-            // add the Reef's guaranteed 2 on top of it.
-            int normalRoll = Mathf.FloorToInt(WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.City)).PartsPerLargeKill);
-            Assert.AreEqual(normalRoll, powerCells,
-                "a City Brute must drop only the normal per-kill roll - never " +
+            // MV-1478: the City is a Parts Cache world - its robots drop NO Parts at all (the area's cache holds them), so
+            // the leak this guards (the Reef-only Dredge Hulk guaranteed 2 extra) must still read zero.
+            Assert.AreEqual(0, powerCells,
+                "a City Brute must drop no Parts - in particular never " +
                 "the Reef-only Dredge Hulk guaranteed 2 extra (DredgeHulkGuaranteedPartDrops)");
         }
     }

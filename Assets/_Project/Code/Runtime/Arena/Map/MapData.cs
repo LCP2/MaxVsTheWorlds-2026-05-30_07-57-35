@@ -30,6 +30,7 @@ namespace MaxWorlds.Arena
         RepairBay,            // MV-1319
         Vault,                // MV-1321
         RocketCrate,          // MV-1448
+        PartsCache,           // MV-1478
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -297,6 +298,10 @@ namespace MaxWorlds.Arena
         /// built <see cref="MaxWorlds.Factories.ChallengePad.SetComposition"/> call — same "resolved at
         /// load, consumed at build" shape as <see cref="cradleComposition"/>. Null for every other kind.</summary>
         public WorldComposition challengeComposition;
+
+        /// <summary>Parts Cache only (MV-1478) - the 0-based <see cref="WorldCatalog"/> index of the world this cache is in
+        /// (resolved by <see cref="WorldMapLoader"/>, which alone holds the <see cref="WorldConfig"/>), or -1 if unresolved.</summary>
+        public int worldIndex = -1;
 
         /// <summary>Deck only (MV-852) — resolved from <see cref="WorldDeck.walled"/>: every non-mouth
         /// edge gets a solid, collider-bearing parapet instead of the ordinary open MV-821 edge band.
