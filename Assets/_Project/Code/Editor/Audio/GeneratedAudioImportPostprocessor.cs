@@ -32,7 +32,9 @@ namespace MaxWorlds.Editor.Audio
 
                 var settings = importer.defaultSampleSettings;
                 settings.loadType = AudioClipLoadType.DecompressOnLoad;
-                settings.compressionFormat = AudioCompressionFormat.ADPCM;
+                // MV-1474: the hand-supplied RIG hum loop stays uncompressed so the seam has no codec artefacts.
+                settings.compressionFormat = path.EndsWith("RigHum_1.wav")
+                    ? AudioCompressionFormat.PCM : AudioCompressionFormat.ADPCM;
                 settings.preloadAudioData = true;
                 importer.defaultSampleSettings = settings;
             }

@@ -30,6 +30,9 @@ namespace MaxWorlds.Editor.Audio
         public string dir;
         // MV-1438: level trim in dB relative to the -1 dBFS combat peak (UI cues -6).
         public float gainDb;
+        // MV-1474: "file" = hand-supplied WAV already in the repo. The generator never touches it, even
+        // with -regen (id or "all").
+        public string source;
     }
 
     [Serializable]
@@ -87,6 +90,21 @@ namespace MaxWorlds.Editor.Audio
             }
         }
 
+        /// <summary>MV-1474: single entry-selection rule for sfx. A hand-supplied (<c>"source": "file"</c>)
+        /// entry is never generated, forced or not; otherwise generate when the file is missing or forced.</summary>
+        public static bool ShouldGenerateSfx(string id, bool outputExists, bool forced)
+        {
+            var manifest = JsonUtility.FromJson<AudioManifest>(File.ReadAllText(ManifestPath));
+            var entry = Array.Find(manifest.sfx, e => e.id == id);
+            return ShouldGenerate(entry, outputExists, forced);
+        }
+
+        internal static bool ShouldGenerate(SfxManifestEntry entry, bool outputExists, bool forced)
+        {
+            if (entry != null && entry.source == "file") return false;
+            return !outputExists || forced;
+        }
+
         private static void Generate(string regenId)
         {
             string manifestJson = File.ReadAllText(ManifestPath);
@@ -117,11 +135,11 @@ namespace MaxWorlds.Editor.Audio
                 for (int v = 1; v <= takes; v++)
                 {
                     string outputPath = isSfx ? $"{dir}/{entry.id}_{v}.wav" : $"{dir}/{entry.id}.wav";
-                    if (File.Exists(outputPath) && !forced) continue;
+                    if (!ShouldGenerate(entry, File.Exists(outputPath), forced)) continue;
                     GenerateOne(entry, outputPath, apiKey, v);
                 }
                 // The old single-take file is replaced by the variants.
-                if (isSfx)
+                if (isSfx && entry.source != "file")
                 {
                     string legacy = $"{dir}/{entry.id}.wav";
                     if (File.Exists(legacy)) { File.Delete(legacy); if (File.Exists(legacy + ".meta")) File.Delete(legacy + ".meta"); }

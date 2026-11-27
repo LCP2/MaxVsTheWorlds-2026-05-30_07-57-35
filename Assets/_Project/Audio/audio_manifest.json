@@ -382,7 +382,8 @@
             "durationSeconds": 24.0,
             "promptInfluence": 0.4,
             "loop": true,
-            "variants": 1
+            "variants": 1,
+            "source": "file"
         }
     ],
     "music": [
