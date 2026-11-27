@@ -509,6 +509,7 @@ namespace MaxWorlds.Weapons
                 if (!CombatLevel.SameLevel(map, shooterOrigin, s_hits[i].transform.position)) continue;
                 d.TakeDamage(new DamageInfo(damage, point, Vector3.up, Team.Player,
                     source: DamageSource.SecondaryWeapon));
+                WeaponPush.ApplyRadial(d, s_hits[i].transform.position, point, WeaponPush.RocketHitsPerSecond); // MV-1476
             }
         }
 

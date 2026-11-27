@@ -359,6 +359,7 @@ namespace MaxWorlds.Weapons
                 if (hit is RobotEnemy robot && robot.IsDormant) robot.Activate();
                 hit.TakeDamage(new DamageInfo(_damage, transform.position, _direction, Team.Player,
                     source: DamageSource.PrimaryWeapon));
+                WeaponPush.Apply(hit, _direction, WeaponPush.LightMissileHitsPerSecond); // MV-1476
                 MaxWorlds.UI.HudSignals.EmitLightMissileHit(transform.position);
                 Retire();
                 return;

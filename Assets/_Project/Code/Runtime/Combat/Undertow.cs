@@ -739,6 +739,7 @@ namespace MaxWorlds.Combat
 
             b.LatchedTarget.TakeDamage(new DamageInfo(tickDamage, origin, dir, Team.Player, soak: true,
                 source: DamageSource.PrimaryWeapon));
+            WeaponPush.Apply(b.LatchedTarget, dir, WeaponPush.UndertowHitsPerSecond); // MV-1476
 
             if (!allowLinePierce) return;
 
@@ -769,6 +770,7 @@ namespace MaxWorlds.Combat
             {
                 second.TakeDamage(new DamageInfo(tickDamage, origin, dir, Team.Player, soak: true,
                     source: DamageSource.PrimaryWeapon));
+                WeaponPush.Apply(second, dir, WeaponPush.UndertowHitsPerSecond); // MV-1476
             }
         }
 
@@ -833,6 +835,7 @@ namespace MaxWorlds.Combat
             {
                 s_buffer[i].TakeDamage(new DamageInfo(tickDamage, origin, dir, Team.Player, soak: true,
                     source: DamageSource.PrimaryWeapon));
+                WeaponPush.Apply(s_buffer[i], dir, WeaponPush.UndertowHitsPerSecond); // MV-1476
             }
 
             return true;

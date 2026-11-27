@@ -197,6 +197,7 @@ namespace MaxWorlds.Weapons
 
                 target.TakeDamage(new DamageInfo(damage, pos, Vector3.down, Team.Player,
                     source: DamageSource.SecondaryWeapon));
+                WeaponPush.Apply(target, c.transform.position - transform.position, WeaponPush.OrbitalHitsPerSecond); // MV-1476
                 cooldowns[target] = PerTargetHitCooldownSeconds;
             }
         }
