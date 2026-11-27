@@ -279,6 +279,9 @@ namespace MaxWorlds.Factories
             go.transform.localPosition = localPosition;
             go.transform.localScale = size;
 
+            // MV-1483: the skin director claims every renderer under a damageable body and re-skins it (it turned the
+            // City pylon's white/grey steel teal, and PartsCache's parts the same way). The pylon's steel is authored.
+            go.AddComponent<SelfDrivenTint>();
             var rend = go.GetComponent<MeshRenderer>();
             Material mat = MaterialLibrary.Tinted(SurfaceKind.Metal, color);
             if (mat != null) rend.sharedMaterial = mat;
@@ -294,6 +297,7 @@ namespace MaxWorlds.Factories
             go.transform.localPosition = localPosition;
             go.transform.localScale = Vector3.one * CrownLightSize;
 
+            go.AddComponent<SelfDrivenTint>();   // MV-1483: authored red crown, not re-skinned
             var rend = go.GetComponent<MeshRenderer>();
             Material mat = VfxMaterials.AdditiveTinted(CrownLightColor);
             if (mat != null) rend.sharedMaterial = mat;

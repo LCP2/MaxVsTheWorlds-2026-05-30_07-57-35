@@ -437,7 +437,7 @@ namespace MaxWorlds.Rendering
                 // than the road (worn concrete, not fresh tar) but still well short of Stone's wet
                 // look.
                 case SurfaceKind.Pavement:
-                    return new SurfaceProfile(1f / 6f, 1.0f, 0.12f, 0.12f);
+                    return new SurfaceProfile(1f / 6f, 1.0f, 0.12f, 0.14f);   // MV-1483: contrast 0.12 -> 0.14 so the darker neutral slab tone keeps MV-1205 joints readable
 
                 default:
                     return new SurfaceProfile(1.0f, 0.5f, 0.06f, 0.10f);

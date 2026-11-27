@@ -303,33 +303,34 @@ namespace MaxWorlds.Rendering
         /// </summary>
         public static BackyardLook City => new BackyardLook
         {
-            KeyColor = new Color(0.78f, 0.81f, 0.88f),   // MV-1472: cool moon key, near-neutral; the warm light is the lamps
+            KeyColor = new Color(0.82f, 0.84f, 0.88f),   // MV-1483: near-neutral moon key; the ONLY warm light is the lamps
             // MV-1207: Lee, 17 Oct — "too much of a dark shade of colour; structures getting lost."
             // +25% on the moon (was 0.70). Still a night key, just one that lets the structures the
             // street is full of actually read.
-            KeyIntensity = 1.75f,
+            KeyIntensity = 0.70f,   // MV-1483: back under the pre-MV-1472 0.875 (1.75 washed objects, e.g. the pylon, toward cyan)
             KeyEuler = new Vector3(62f, -30f, 0f),
             ShadowStrength = 0.6f,
 
-            FillColor = new Color(0.46f, 0.43f, 0.40f),   // MV-1472: neutral-warm, no purple
-            FillIntensity = 0.40f,
+            FillColor = new Color(0.44f, 0.44f, 0.44f),   // MV-1483: neutral, no warm/brown tint
+            FillIntensity = 0.22f,
             FillEuler = new Vector3(20f, 140f, 0f),
 
-            RimColor = new Color(1.0f, 0.80f, 0.58f),
-            RimIntensity = 0.9f,
+            RimColor = new Color(0.80f, 0.82f, 0.86f),   // MV-1483: was warm amber; only the lamps are warm
+            RimIntensity = 0.55f,
             RimEuler = new Vector3(12f, 200f, 0f),
 
             // MV-1207: +35% ambient. A uniform RGB scale moves V without touching H/S (max and min
             // both scale by the same factor, so (max-min)/max — the S term — cancels), so this is
             // "lift the ambient" in exactly the sense the HSV-preserving palette lift below is.
-            AmbientSky = new Color(0.48f, 0.46f, 0.44f),      // MV-1472: R >= B everywhere (was blue-violet)
-            AmbientEquator = new Color(0.40f, 0.39f, 0.37f),
-            AmbientGround = new Color(0.32f, 0.31f, 0.30f),
+            // MV-1483: neutral charcoal, <= 70% of the MV-1472 luminance, R - B in [0, 0.01].
+            AmbientSky = new Color(0.320f, 0.320f, 0.315f),
+            AmbientEquator = new Color(0.260f, 0.260f, 0.255f),
+            AmbientGround = new Color(0.200f, 0.200f, 0.195f),
 
             // MV-1207: fog lifted 20% in value. Street-lamp pools are CityKit's own unlit/additive
             // materials, untouched by this struct, so they keep reading as lamps against the lifted
             // street.
-            FogColor = new Color(0.062f, 0.058f, 0.056f),
+            FogColor = new Color(0.050f, 0.050f, 0.050f),
             FogDensity = 0.010f,
 
             // Sky fields copied from Stormdrain — unused, ApplySky nulls the skybox for this biome
@@ -348,19 +349,19 @@ namespace MaxWorlds.Rendering
             AoIntensity = 0.8f,
             AoRadius = 0.3f,
 
-            PostExposure = 0.2f,
-            Contrast = 8f,
+            PostExposure = -0.05f,
+            Contrast = -12f,   // MV-1483: was 8; the grade's contrast widened the a2/a15 spread past the 40-55 band
             Saturation = 6f,
             ColorFilter = Color.white,
-            ShadowTint = new Color(0.62f, 0.60f, 0.58f),    // MV-1472: no purple split-tone
-            HighlightTint = new Color(1.0f, 0.92f, 0.80f),
+            ShadowTint = new Color(0.60f, 0.60f, 0.60f),    // MV-1483: neutral split-tone
+            HighlightTint = new Color(1.0f, 1.0f, 1.0f),
 
             BloomThreshold = 1.0f,
             BloomIntensity = 0.6f,
             BloomScatter = 0.6f,
             BloomTint = Color.white,
 
-            VignetteIntensity = 0.18f,
+            VignetteIntensity = 0.30f,
             VignetteSmoothness = 0.5f,
             FilmGrain = 0.08f,
         };

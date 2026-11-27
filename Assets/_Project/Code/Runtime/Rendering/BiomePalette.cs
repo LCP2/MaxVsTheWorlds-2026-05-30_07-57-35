@@ -343,11 +343,11 @@ namespace MaxWorlds.Rendering
             // GroundDry and every reserved state colour are deliberately left alone (ticket's own
             // scope).
             // MV-1472: ground neutral-warm, no blue/violet cast (the road itself is CityKit.Asphalt).
-            GroundBase = new Color(0.330f, 0.306f, 0.285f),
-            GroundAccent = new Color(0.310f, 0.290f, 0.270f),
-            GroundDry = new Color(0.240f, 0.225f, 0.210f),
-            Wall = new Color(0.50f, 0.44f, 0.46f) * 1.15f,
-            Prop = new Color(0.36f, 0.39f, 0.48f) * 1.15f,
+            GroundBase = new Color(0.326f, 0.322f, 0.322f),   // MV-1483: neutral (no brown); V stays >= MV-1207's floor
+            GroundAccent = new Color(0.300f, 0.297f, 0.297f),
+            GroundDry = new Color(0.230f, 0.228f, 0.228f),
+            Wall = new Color(0.53f, 0.53f, 0.53f),   // MV-1483: neutral (was 0.50,0.44,0.46 x1.15)
+            Prop = new Color(0.40f, 0.41f, 0.43f) * 1.15f,   // MV-1483: near-neutral cover (was blue 0.36,0.39,0.48)
 
             Wood = new Color(0.627f, 0.471f, 0.314f),
             Stone = new Color(0.439f, 0.463f, 0.525f),

@@ -132,8 +132,8 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.LessOrEqual(Vector2.Distance(poolCentreXZ, headXZ), 0.1f,
                     "the street lamp's pool must sit under the head's own ground point");
                 Assert.LessOrEqual(poolRenderer.bounds.center.y, 0.05f, "the pool must sit flat on the floor");
-                Assert.GreaterOrEqual(poolRenderer.bounds.size.x, 6.0f, "the pool must spread at least 6 m across X");
-                Assert.GreaterOrEqual(poolRenderer.bounds.size.z, 6.0f, "the pool must spread at least 6 m across Z");
+                Assert.GreaterOrEqual(poolRenderer.bounds.size.x, 4.5f, "the pool must spread at least 4.5 m across X (MV-1483: 5 m)");
+                Assert.GreaterOrEqual(poolRenderer.bounds.size.z, 4.5f, "the pool must spread at least 4.5 m across Z (MV-1483: 5 m)");
 
                 // ---- AC1: a 44 m shopfront run yields 6 units whose facades span the run ----
                 Renderer[] facades = shopHost.transform.GetComponentsInChildren<Renderer>(true)

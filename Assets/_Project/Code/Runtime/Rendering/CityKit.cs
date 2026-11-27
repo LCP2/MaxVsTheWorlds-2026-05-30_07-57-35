@@ -40,7 +40,7 @@ namespace MaxWorlds.Rendering
         // MV-1205: lifted from Rgb(52, 56, 72) (mean ~0.235 linear) — Lee's TestFlight shot (17 Oct)
         // read the road as "nondescript... I don't feel like I'm standing on anything" at that value,
         // and the ticket's own number is "about 0.32 linear".
-        public static readonly Color Asphalt = Rgb(40, 38, 37);   // MV-1472: dark neutral-warm tarmac (was blue-grey 0.28,0.32,0.36)
+        public static readonly Color Asphalt = Rgb(27, 27, 27);   // MV-1483: dark NEUTRAL charcoal tarmac (MV-1472 was warm 40,38,37)
 
         /// <summary>MV-1472: the street lamps' pool tone, about #FFA03A.</summary>
         public static readonly Color PoolAmber = Rgb(255, 160, 58);
@@ -52,7 +52,7 @@ namespace MaxWorlds.Rendering
 
         // MV-1205: "lighter than the road, about 0.45 linear" (was Rgb(112, 118, 134), mean ~0.476 —
         // already close; nudged to land exactly on the ticket's number on the same blue-grey hue).
-        public static readonly Color Pavement = Rgb(64, 60, 56);   // MV-1472: warm concrete (was blue-grey 0.41,0.44,0.50)
+        public static readonly Color Pavement = Rgb(54, 54, 54);   // MV-1483: neutral concrete (MV-1472 was warm 64,60,56)
 
         // MV-1205: "15% lighter than the pavement" — derived, not authored, so the relationship the
         // ticket asks for can never drift out of step with Pavement.
@@ -448,69 +448,102 @@ namespace MaxWorlds.Rendering
             return go;
         }
 
-        /// <summary>MV-1472: a lamp pool is 4-6 m across (radius 3.0 m = 6 m).</summary>
-        public const float LampPoolRadius = 3.0f;
-        /// <summary>Per-ring additive strength of the amber pool; ten stacked rings sum to ~10x at the centre.</summary>
-        public const float LampPoolRingStrength = 0.24f;
+        /// <summary>MV-1483: a lamp pool is 5 m across (radius 2.5 m); the ticket's band is 4.5-5.5 m.</summary>
+        public const float LampPoolRadius = 2.74f;
+        /// <summary>MV-1483: peak additive strength of a pool (the gradient texture peaks at 1). The pool tone is desaturated to PoolMaxSaturation first, so a bright pool never wears the relay guard colour (IsReservedRelayColour: S >= 0.6 and V >= 0.6).</summary>
+        public const float LampPoolPeak = 1.0f;
+        /// <summary>A warm-white tungsten tone, not a saturated neon: under the relay guard's S 0.6.</summary>
+        public const float PoolMaxSaturation = 0.59f;
 
-        /// <summary>MV-1472: a soft amber floor pool named "Pool" — ten concentric discs in ONE generated mesh
-        /// (additive, so the overlaps stack into a bright core fading to the rim) instead of the old flat
-        /// hard-edged disc. One renderer, one draw call.</summary>
-        public static GameObject BuildAmberPool(Transform parent, Vector3 groundCentre, float radius)
-        {
-            var go = new GameObject("Pool");
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = groundCentre + Vector3.up * 0.03f;
-            go.AddComponent<MeshFilter>().sharedMesh = SoftDiscMesh(radius);
-            var rend = go.AddComponent<MeshRenderer>();
-            rend.sharedMaterial = StormdrainLightKit.AdditiveUnlit(PoolAmber * LampPoolRingStrength, "CityAmberPool");
-            go.AddComponent<KeepsOwnMaterial>();
-            StormdrainKit.Strip(go);
-            return go;
-        }
+        /// <summary>MV-1483: a soft floor pool named "Pool" - ONE flat additive unlit quad carrying the shared
+        /// radial-gradient texture, replacing MV-1472's ten stacked discs (visible stepped rings). One renderer,
+        /// one draw call, no real-time light.</summary>
+        public static GameObject BuildAmberPool(Transform parent, Vector3 groundCentre, float radius) =>
+            BuildSoftPool(parent, groundCentre, radius, PoolAmber);
 
-        /// <summary>MV-1473: the same soft multi-ring floor pool as <see cref="BuildAmberPool"/>, in any tone
-        /// (the City -> Reef corridor's lamps drift from amber to teal).</summary>
+        /// <summary>MV-1473: the same soft pool in any tone (the City -> Reef corridor's lamps drift amber to teal).</summary>
         public static GameObject BuildSoftPool(Transform parent, Vector3 groundCentre, float radius, Color tone)
         {
             var go = new GameObject("Pool");
             go.transform.SetParent(parent, false);
             go.transform.localPosition = groundCentre + Vector3.up * 0.03f;
-            go.AddComponent<MeshFilter>().sharedMesh = SoftDiscMesh(radius);
+            go.AddComponent<MeshFilter>().sharedMesh = PoolQuad(radius);
             var rend = go.AddComponent<MeshRenderer>();
-            rend.sharedMaterial = StormdrainLightKit.AdditiveUnlit(tone * LampPoolRingStrength, "CityReefPool");
+            rend.sharedMaterial = PoolMaterial(CapSaturation(tone, PoolMaxSaturation) * LampPoolPeak);
             go.AddComponent<KeepsOwnMaterial>();
             StormdrainKit.Strip(go);
             return go;
         }
 
-        private static Mesh s_softDisc;
-        private static Mesh SoftDiscMesh(float radius)
+        /// <summary>Mixes <paramref name="c"/> toward white just far enough that its HSV saturation is at most <paramref name="maxS"/>.</summary>
+        public static Color CapSaturation(Color c, float maxS)
         {
-            if (s_softDisc != null && Mathf.Approximately(s_softDiscRadius, radius)) return s_softDisc;
-            float[] rings = { 1f, 0.9f, 0.8f, 0.7f, 0.6f, 0.5f, 0.4f, 0.3f, 0.2f, 0.1f };
-            const int seg = 28;
-            var v = new List<Vector3>();
-            var n = new List<Vector3>();
-            var t = new List<int>();
-            foreach (float k in rings)
-            {
-                int c = v.Count;
-                v.Add(Vector3.zero); n.Add(Vector3.up);
-                for (int i = 0; i < seg; i++)
-                {
-                    float a = (float)i / seg * Mathf.PI * 2f;
-                    v.Add(new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (radius * k)); n.Add(Vector3.up);
-                }
-                for (int i = 0; i < seg; i++) { t.Add(c); t.Add(c + 1 + (i + 1) % seg); t.Add(c + 1 + i); }
-            }
-            s_softDisc = new Mesh { name = "CityAmberPoolDisc" };
-            s_softDisc.SetVertices(v); s_softDisc.SetNormals(n); s_softDisc.SetTriangles(t, 0);
-            s_softDisc.RecalculateBounds();
-            s_softDiscRadius = radius;
-            return s_softDisc;
+            Color.RGBToHSV(c, out float h, out float sat, out float v);
+            if (sat <= maxS) return c;
+            Color o = Color.HSVToRGB(h, maxS, v);
+            o.a = c.a;
+            return o;
         }
-        private static float s_softDiscRadius;
+
+        private static Texture2D s_poolGradient;
+        /// <summary>The ONE radial-gradient texture every pool shares: 1 at the centre, smoothly to 0 at the rim.</summary>
+        public static Texture2D PoolGradient()
+        {
+            if (s_poolGradient != null) return s_poolGradient;
+            const int n = 64;
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, true, true)
+            {
+                name = "CityPoolGradient", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                float f = Mathf.Clamp01((1f - r) * 2.2f);
+                f = f * f * (3f - 2f * f);   // smoothstep: no kink at the rim, soft core
+                byte v = (byte)Mathf.RoundToInt(f * 255f);
+                px[y * n + x] = new Color32(v, v, v, 255);
+            }
+            tex.SetPixels32(px);
+            tex.Apply(true, false);
+            s_poolGradient = tex;
+            return tex;
+        }
+
+        private static readonly Dictionary<Color, Material> s_poolMats = new Dictionary<Color, Material>();
+        private static Material PoolMaterial(Color tone)
+        {
+            if (s_poolMats.TryGetValue(tone, out Material cached) && cached != null) return cached;
+            Material mat = StormdrainLightKit.AdditiveUnlit(tone, "CityPool");
+            // AdditiveUnlit caches by tone, so copy before adding the map; a shared instance must not leak the texture.
+            mat = new Material(mat) { name = "CityPoolGradient_Additive", hideFlags = HideFlags.HideAndDontSave };
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", PoolGradient());
+            if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", PoolGradient());
+            s_poolMats[tone] = mat;
+            return mat;
+        }
+
+        private static Mesh s_poolQuad;
+        private static float s_poolQuadRadius;
+        private static Mesh PoolQuad(float radius)
+        {
+            if (s_poolQuad != null && Mathf.Approximately(s_poolQuadRadius, radius)) return s_poolQuad;
+            var m = new Mesh { name = "CityPoolQuad", hideFlags = HideFlags.HideAndDontSave };
+            m.SetVertices(new[]
+            {
+                new Vector3(-radius, 0f, -radius), new Vector3(-radius, 0f, radius),
+                new Vector3(radius, 0f, radius), new Vector3(radius, 0f, -radius),
+            });
+            m.SetNormals(new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up });
+            m.SetUVs(0, new[] { new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0) });
+            m.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+            m.RecalculateBounds();
+            s_poolQuad = m; s_poolQuadRadius = radius;
+            return m;
+        }
 
         // ---------------------------------------------------------------- road markings (generated mesh)
 
