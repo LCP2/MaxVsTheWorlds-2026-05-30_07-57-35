@@ -39,7 +39,12 @@ namespace MaxWorlds.Factories
 
         private const float Radius = WorldMapLoader.PartsCacheFootprint * 0.5f;
         private const float Height = WorldMapLoader.PartsCacheHeight;
-        private const float LabelHeight = 2.6f;
+        // MV-1487: label cap height ~ one lock clamp, never wider than 2.2x the dome; the dome is a hemisphere on the ring.
+        private const float LabelWorldHeight = 0.28f;
+        private const float LabelGap = 0.2f;
+        private const float LabelMaxWidthOverDome = 2.2f;
+        private const float RingRadiusScale = 1.75f;
+        private const float DomeHeightOverCache = 1.3f;
         private const float LabelCharacterSize = 0.06f;
         private const int LabelFontSize = 100;
         private const float LabelPitchDegrees = 72f;
@@ -76,6 +81,20 @@ namespace MaxWorlds.Factories
         public float Health => _hp;
         public float MaxHealth => _maxHp;
         public string LabelText => _label != null ? _label.text : string.Empty;
+        /// <summary>Resolved world-space size (metres) of the label's rendered glyphs (MV-1487; Tier 2).</summary>
+        public Vector2 LabelWorldSize
+        {
+            get
+            {
+                if (_label == null) return Vector2.zero;
+                _label.ForceMeshUpdate();
+                Vector3 ls = _label.transform.lossyScale;
+                return new Vector2(_label.renderedWidth * ls.x, _label.renderedHeight * ls.y);
+            }
+        }
+        public Renderer ShieldRenderer => _shield != null ? _shield.GetComponent<Renderer>() : null;
+        public Transform DashedRing => _dashedRing;
+        private string _fittedText;
         public int BurstPickupCount { get; private set; }
 
         // MV-1484: a SEALED cache is a live, solid shot-stopper too (it absorbs with a spark; TakeDamage does the sealed/
@@ -235,17 +254,19 @@ namespace MaxWorlds.Factories
                 _lockHome.Add(home);
             }
 
-            // Shield dome: a translucent red additive ellipsoid.
-            var dome = Prim(PrimitiveType.Sphere, "Shield", _visual, new Vector3(0f, baseY + Height * 0.55f, 0f),
-                new Vector3(Radius * 2.9f, Height * 1.75f, Radius * 2.9f), Quaternion.identity, RedColor, additive: false);
+            // Shield dome (MV-1487): a HEMISPHERE whose base circle sits on the floor at exactly the dashed ring's radius and
+            // centre, so the dashed ring is the dome's rim. Mesh is unit radius, y >= 0.
+            var dome = Prim(PrimitiveType.Cube, "Shield", _visual, new Vector3(0f, baseY, 0f),
+                DomeScale, Quaternion.identity, RedColor, additive: false);
+            dome.GetComponent<MeshFilter>().sharedMesh = HemisphereMesh();
             dome.sharedMaterial = ShieldMaterial();
             dome.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             dome.receiveShadows = false;
             _shield = dome.transform;
 
             // Dashed red floor ring (sealed) and solid cyan ring (unsealed).
-            _dashedRing = BuildRing("DashedRing", baseY + 0.03f, Radius * 1.75f, 14, 0.5f, RedColor, additive: false);
-            _solidRing = BuildRing("SolidRing", baseY + 0.03f, Radius * 1.75f, 40, 1.05f, CyanColor);
+            _dashedRing = BuildRing("DashedRing", baseY + 0.03f, Radius * RingRadiusScale, 14, 0.5f, RedColor, additive: false);
+            _solidRing = BuildRing("SolidRing", baseY + 0.03f, Radius * RingRadiusScale, 40, 1.05f, CyanColor);
             _healthRing = BuildRing("HealthRing", baseY + 0.05f, Radius * 1.45f, HealthRingSegments, 0.9f, CyanColor, _ringSegments);
 
             // Light column.
@@ -257,6 +278,40 @@ namespace MaxWorlds.Factories
             var fl = Prim(PrimitiveType.Sphere, "Flash", _visual, new Vector3(0f, baseY + Height, 0f), Vector3.one * 0.3f,
                 Quaternion.identity, new Color(1f, 0.85f, 0.45f), additive: true);
             _flash = fl.transform;
+        }
+
+        private static Vector3 DomeScale => new Vector3(Radius * RingRadiusScale, Height * DomeHeightOverCache, Radius * RingRadiusScale);
+
+        private static Mesh _hemisphere;
+
+        /// <summary>Unit-radius upper hemisphere (y from 0 to 1), smooth normals.</summary>
+        private static Mesh HemisphereMesh()
+        {
+            if (_hemisphere != null) return _hemisphere;
+            const int lon = 32, lat = 12;
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            for (int j = 0; j <= lat; j++)
+            {
+                float phi = j * Mathf.PI * 0.5f / lat;   // 0 = pole, 90 deg = rim on the floor
+                for (int i = 0; i <= lon; i++)
+                {
+                    float th = i * 2f * Mathf.PI / lon;
+                    verts.Add(new Vector3(Mathf.Sin(phi) * Mathf.Cos(th), Mathf.Cos(phi), Mathf.Sin(phi) * Mathf.Sin(th)));
+                }
+            }
+            for (int j = 0; j < lat; j++)
+                for (int i = 0; i < lon; i++)
+                {
+                    int a = j * (lon + 1) + i, b = a + lon + 1;
+                    tris.AddRange(new[] { a, a + 1, b, a + 1, b + 1, b });
+                }
+            _hemisphere = new Mesh { name = "PartsCacheHemisphere", hideFlags = HideFlags.HideAndDontSave };
+            _hemisphere.SetVertices(verts);
+            _hemisphere.SetNormals(verts);
+            _hemisphere.SetTriangles(tris, 0);
+            _hemisphere.RecalculateBounds();
+            return _hemisphere;
         }
 
         /// <summary>The same Fresnel-rim force-field shader <see cref="RelayDome"/> uses (a translucent red shell with a bright rim),
@@ -368,16 +423,34 @@ namespace MaxWorlds.Factories
         {
             var go = new GameObject("Label");
             go.transform.SetParent(_visual, false);   // metre space: the root is the 1.6 x 1.4 x 1.6 collider cube, which would stretch the text
-            go.transform.localPosition = new Vector3(0f, LabelHeight, 0f);
+            go.transform.localPosition = LabelLocalPos(LabelWorldHeight);
             go.transform.localRotation = Quaternion.Euler(LabelPitchDegrees, 0f, 0f);
             _label = CrispUi.WorldText(go, string.Empty, LabelFontSize, LabelCharacterSize, Color.white);
 
             for (int i = 0; i < MaxPips; i++)
             {
                 float x = (i - (MaxPips - 1) * 0.5f) * 0.28f;
-                _pips.Add(Prim(PrimitiveType.Sphere, "Pip" + i, _visual, new Vector3(x, LabelHeight - 0.45f, 0f),
+                _pips.Add(Prim(PrimitiveType.Sphere, "Pip" + i, _visual, new Vector3(x, LabelLocalPos(LabelWorldHeight).y - 0.3f, 0f),
                     Vector3.one * 0.2f, Quaternion.identity, RedColor, additive: false));
             }
+        }
+
+        private static Vector3 LabelLocalPos(float labelHeight)
+            => new Vector3(0f, -Height * 0.5f + Height * DomeHeightOverCache + LabelGap + labelHeight * 0.5f, 0f);
+
+        /// <summary>Shrinks the label to cap height ~<see cref="LabelWorldHeight"/>, then further if it would exceed 2.2x the dome's
+        /// diameter; runs only when the text changes.</summary>
+        private void FitLabel()
+        {
+            if (_label == null || _label.text == _fittedText) return;
+            _fittedText = _label.text;
+            _label.transform.localScale = Vector3.one;
+            _label.ForceMeshUpdate();
+            float h = Mathf.Max(0.0001f, _label.renderedHeight), w = Mathf.Max(0.0001f, _label.renderedWidth);
+            float k = LabelWorldHeight / h;
+            float maxW = LabelMaxWidthOverDome * 2f * Radius * RingRadiusScale;
+            k = Mathf.Min(k, maxW / w);
+            _label.transform.localScale = Vector3.one * k;
         }
 
         // ---------------------------------------------------------------- state
@@ -574,6 +647,7 @@ namespace MaxWorlds.Factories
                     _label.gameObject.SetActive(_flashT >= 0f);   // "+n PARTS" flies up from the pickup toast; the label is gone
                     break;
             }
+            FitLabel();
         }
 
         private void UpdateHealthRing()
@@ -592,7 +666,7 @@ namespace MaxWorlds.Factories
                 _shatterT += dt;
                 float t = Mathf.Clamp01(_shatterT / ShatterSeconds);
                 float grow = 1f + t * 0.35f;
-                _shield.localScale = new Vector3(Radius * 2.9f, Height * 1.75f, Radius * 2.9f) * grow;
+                _shield.localScale = DomeScale * grow;
                 if (t >= 1f) { _shatterT = -1f; _shield.gameObject.SetActive(false); }
             }
 
