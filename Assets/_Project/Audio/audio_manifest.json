@@ -386,6 +386,30 @@
             "source": "file"
         },
         {
+            "id": "GateHit",
+            "prompt": "a heavy armoured steel door taking a single short hit, dull metallic thunk with a brief ring that ends quickly, then silence, industrial, no music",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "GateStrained",
+            "prompt": "heavy steel gate groaning and buckling under strain, metal creaking and bending, a few rivets popping, industrial machine",
+            "durationSeconds": 1.0,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "GateOpened",
+            "prompt": "a heavy armoured barrier giving way, a final metallic crunch, then a servo mechanical release and a slide and collapse with a low settling rumble, industrial machine",
+            "durationSeconds": 2.5,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
             "id": "RigHum",
             "prompt": "seamless loop, low warm electrical hum of current through an old resistor, very slow gentle pulsing (about one swell every 3 seconds), faint crackle, workshop-quiet, no melody, no sudden sounds",
             "durationSeconds": 24.0,

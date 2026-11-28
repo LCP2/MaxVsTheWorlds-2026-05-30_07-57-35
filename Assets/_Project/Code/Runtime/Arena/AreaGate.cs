@@ -768,6 +768,24 @@ namespace MaxWorlds.Arena
             if (RequiresClear && RoomClear != null && !RoomClear()) return;
 
             _health.TakeDamage(info.Amount);
+            EmitDamageAudio();
+        }
+
+        // MV-1482: hit rhythm (at most one GateHit per 0.12 s, counted down in Tick) and the two strain beats.
+        private const float GateHitMinInterval = 0.12f;
+        private float _hitCooldown;
+        private int _strainStage;   // 0 = none yet, 1 = below 66%, 2 = below 33%
+
+        private void EmitDamageAudio()
+        {
+            if (!_health.IsAlive) return;   // the breaking blow is GateOpened's, not a hit
+            Vector3 pos = transform.position;
+            float n = _health.Normalized;
+            if (_strainStage < 1 && n < 0.66f) { _strainStage = 1; HudSignals.EmitGateStrained(pos); }
+            if (_strainStage < 2 && n < 0.33f) { _strainStage = 2; HudSignals.EmitGateStrained(pos); }
+            if (_hitCooldown > 0f) return;
+            _hitCooldown = GateHitMinInterval;
+            HudSignals.EmitGateHit(pos);
         }
 
         /// <summary>Opens the gate immediately regardless of remaining HP or <see cref="Locked"/> — how
@@ -799,6 +817,8 @@ namespace MaxWorlds.Arena
                 DevTuning.Or(DevTuning.GateBreakSeconds, ArenaTuning.DefaultGateBreakSeconds));
             _health = new DestructibleHealth(breakSeconds * AssumedPrimaryDps);
             _health.Destroyed += Open;
+            _strainStage = 0;
+            _hitCooldown = 0f;
 
             IsOpen = false;
             _hinging = false;
@@ -829,6 +849,7 @@ namespace MaxWorlds.Arena
 
             StartHingeSwing();
 
+            HudSignals.EmitGateOpened(transform.position);   // MV-1482
             Opened?.Invoke();
         }
 
@@ -914,6 +935,7 @@ namespace MaxWorlds.Arena
         /// hook into a private method.</summary>
         public void Tick(float dt)
         {
+            if (_hitCooldown > 0f) _hitCooldown -= dt;
             AdvanceStormdrainSlide(dt);
 
             if (!_hinging) return;

@@ -100,6 +100,7 @@ namespace MaxWorlds.Factories
 
             if (_collider != null) _collider.enabled = false; // passable immediately
 
+            MaxWorlds.UI.HudSignals.EmitGateOpened(transform.position);   // MV-1482
             Opened?.Invoke();
         }
 

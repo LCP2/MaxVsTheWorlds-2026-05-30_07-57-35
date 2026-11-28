@@ -101,7 +101,8 @@ namespace MaxWorlds.Audio
         /// CanisterExplosion, WeaponCoreCollected, FinaleGateCrossed).</summary>
         public static bool Ducks(Cue cue) =>
             cue == Cue.BossEngaged || cue == Cue.BossDefeated || cue == Cue.FactoryDestroyed ||
-            cue == Cue.CanisterExplosion || cue == Cue.WeaponCoreCollected || cue == Cue.FinaleGateCrossed;
+            cue == Cue.CanisterExplosion || cue == Cue.WeaponCoreCollected || cue == Cue.FinaleGateCrossed ||
+            cue == Cue.GateOpened;
     }
 
     /// <summary>MV-1437 variant choice: round-robin that never repeats a variant back-to-back.</summary>
