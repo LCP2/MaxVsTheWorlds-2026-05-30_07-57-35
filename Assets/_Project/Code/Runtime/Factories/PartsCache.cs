@@ -101,7 +101,7 @@ namespace MaxWorlds.Factories
         private Transform _dashedRing;
         private Transform _solidRing;
         private Transform _healthRing;
-        private TextMesh _label;
+        private TMPro.TextMeshPro _label;
         private readonly List<Renderer> _slitRenderers = new List<Renderer>();
         private readonly List<Renderer> _bodyRenderers = new List<Renderer>();
         private Renderer _coreRenderer;
@@ -370,20 +370,7 @@ namespace MaxWorlds.Factories
             go.transform.SetParent(_visual, false);   // metre space: the root is the 1.6 x 1.4 x 1.6 collider cube, which would stretch the text
             go.transform.localPosition = new Vector3(0f, LabelHeight, 0f);
             go.transform.localRotation = Quaternion.Euler(LabelPitchDegrees, 0f, 0f);
-            _label = go.AddComponent<TextMesh>();
-            _label.font = HudFont.Get();
-            _label.fontSize = LabelFontSize;
-            _label.characterSize = LabelCharacterSize;
-            _label.fontStyle = FontStyle.Bold;
-            _label.anchor = TextAnchor.MiddleCenter;
-            _label.alignment = TextAlignment.Center;
-            var mr = go.GetComponent<MeshRenderer>();
-            if (mr != null)
-            {
-                mr.sharedMaterial = _label.font.material;
-                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                mr.receiveShadows = false;
-            }
+            _label = CrispUi.WorldText(go, string.Empty, LabelFontSize, LabelCharacterSize, Color.white);
 
             for (int i = 0; i < MaxPips; i++)
             {
