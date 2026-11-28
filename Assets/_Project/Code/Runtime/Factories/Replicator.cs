@@ -616,7 +616,54 @@ namespace MaxWorlds.Factories
         /// leading away from the hatch along <see cref="HatchOutwardNormal"/>, slot 0 closest
         /// (<see cref="QueueSlotSpacing"/> out) and each further slot one more spacing beyond it. Public
         /// so a test can read a slot back without re-deriving this formula.</summary>
-        public Vector3 QueueSlotPosition(int slot) => HatchPosition + HatchOutwardNormal * (QueueSlotSpacing * (slot + 1));
+        public Vector3 QueueSlotPosition(int slot)
+        {
+            // MV-1488: every slot sits on open floor clear of cover (collider radius + 0.1 m); where the
+            // straight line meets cover or a wall the line bends along open floor, spacing kept at 1.8 m.
+            Vector3 dir = HatchOutwardNormal;
+            Vector3 prev = HatchPosition;
+            float y = prev.y;
+            Vector3 pos = prev;
+            for (int k = 0; k <= slot; k++)
+            {
+                pos = prev + dir * QueueSlotSpacing;
+                if (!SlotClear(pos))
+                {
+                    for (int step = 1; step <= 18; step++)
+                    {
+                        bool found = false;
+                        for (int sign = -1; sign <= 1 && !found; sign += 2)
+                        {
+                            Vector3 d = Quaternion.AngleAxis(sign * step * 10f, Vector3.up) * dir;
+                            Vector3 c = prev + d * QueueSlotSpacing;
+                            if (SlotClear(c)) { dir = d; pos = c; found = true; }
+                        }
+                        if (found) break;
+                    }
+                }
+                pos.y = y;
+                prev = pos;
+            }
+            return pos;
+        }
+
+        private const float QueueSlotCoverMargin = 0.1f;
+
+        /// <summary>MV-1488: true when a robot standing at <paramref name="p"/> touches no cover and has
+        /// walkable floor under it.</summary>
+        private bool SlotClear(Vector3 p)
+        {
+            Vector3 c = new Vector3(p.x, GroundY + TwinSpotColliderRadius + 0.05f, p.z);
+            if (Physics.CheckSphere(c, TwinSpotColliderRadius + QueueSlotCoverMargin, CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+                return false;
+            MapData map = EnemyNavigation.Map;
+            if (map != null)
+            {
+                Vector3 snapped = map.SnapToWalkableSurface(transform.position, new Vector3(p.x, GroundY, p.z), MusterEdgeMargin);
+                if (HorizontalDistance(snapped, p) > 0.05f) return false;
+            }
+            return true;
+        }
 
         /// <summary>MV-1107: <see cref="IFactoryDoorFacing"/> — this box's own authored IN-face
         /// direction, the same one <see cref="HatchOutwardNormal"/> already resolves off
@@ -786,14 +833,34 @@ namespace MaxWorlds.Factories
         public void TickLure()
         {
             if (!IsAlive) return;
+            if (_capHeld) return;   // MV-1488: never idle in a held queue
 
             while (_queue.Count < EffectiveQueueCap)
             {
                 RobotEnemy nearest = NearestEligible();
                 if (nearest == null) break; // nobody left in this area to assign
                 _queue.Add(nearest);
-                nearest.SeekReplicator(QueueSlotPosition(_queue.Count - 1));
+                nearest.SeekReplicator(QueueSlotPosition(_queue.Count - 1), _queue.Count == 1);
             }
+        }
+
+        /// <summary>MV-1488: seconds between re-checks of whether intake is held by the world's alive cap.</summary>
+        public const float CapRecheckSeconds = 0.5f;
+        private bool _capHeld;
+        private float _capRecheckTimer;
+
+        /// <summary>MV-1488: true while this relay cannot take a robot in because the area is at the
+        /// world's alive cap - it keeps no queue and does not lure while held.</summary>
+        public bool IntakeHeldByAliveCap => _capHeld;
+
+        private void RefreshCapHold()
+        {
+            _capRecheckTimer = CapRecheckSeconds;
+            bool held = !HasRoomUnderAliveCap();
+            if (held == _capHeld) return;
+            _capHeld = held;
+            if (_capHeld) ReleaseAllAssignees();
+            else if (_playerInArea) TickLure();   // room again: resume luring
         }
 
         /// <summary>MV-872: the queue can never hold more than the box's own remaining
@@ -883,7 +950,7 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive) return;
             _playerInArea = enteredArea == AreaIndex;
-            if (_playerInArea) TickLure();
+            if (_playerInArea) { RefreshCapHold(); TickLure(); }
             else ReleaseAllAssignees();
         }
 
@@ -922,7 +989,7 @@ namespace MaxWorlds.Factories
                 if (reallyInArea != _playerInArea)
                 {
                     _playerInArea = reallyInArea;
-                    if (_playerInArea) TickLure();
+                    if (_playerInArea) { RefreshCapHold(); TickLure(); }
                     else ReleaseAllAssignees();
                 }
             }
@@ -930,6 +997,10 @@ namespace MaxWorlds.Factories
             // MV-813: free-running, independent of every other beat here — the status ring pulses off
             // this alone, whether or not anything is actually happening.
             _statusRingPulseTime += dt;
+
+            // MV-1488: re-check the alive cap every CapRecheckSeconds so robots never flip-flop.
+            _capRecheckTimer -= dt;
+            if (_capRecheckTimer <= 0f) RefreshCapHold();
 
             // MV-807: a queued robot that died, got converted, or is otherwise no longer eligible is
             // dropped and every remaining slot behind it closes up — re-targeted onto its new slot.
@@ -1085,7 +1156,7 @@ namespace MaxWorlds.Factories
                     // true, same reasoning as the first twin above.
                     // MV-1394: the second twin re-queues (no NoReplicate tag) while Max is in this area
                     // and the line has a free slot; otherwise it chases Max with the usual tag.
-                    bool requeue = _playerInArea && _queue.Count < MaxQueueSlots;
+                    bool requeue = _playerInArea && !_capHeld && _queue.Count < MaxQueueSlots;
                     int emittedBefore = _spawner.Emitted;
                     List<RobotEnemy> spawned = _spawner.SpawnExact(p.Kind, 1,
                         requeue ? 0f : TwinNoReplicateSeconds, ignorePerFactoryCap: true);
@@ -1098,7 +1169,7 @@ namespace MaxWorlds.Factories
                         if (requeue && spawned.Count > 0)
                         {
                             _queue.Add(spawned[0]);
-                            spawned[0].SeekReplicator(QueueSlotPosition(_queue.Count - 1));
+                            spawned[0].SeekReplicator(QueueSlotPosition(_queue.Count - 1), _queue.Count == 1);
                         }
                     }
                     _pending.RemoveAt(i);
@@ -1300,7 +1371,7 @@ namespace MaxWorlds.Factories
         private void RetargetQueue()
         {
             for (int i = 0; i < _queue.Count; i++)
-                _queue[i].SeekReplicator(QueueSlotPosition(i));
+                _queue[i].SeekReplicator(QueueSlotPosition(i), i == 0);
         }
 
         /// <summary>MV-808: distance ignoring Y — see the "atSlot" arrival check's own doc comment for

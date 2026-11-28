@@ -67,7 +67,7 @@
    "molten"
   ],
   "rangedDamageMultiplier": 1.5,
-  "aliveCap": 12,
+  "aliveCap": 24,
   "hazardRobotDamageMultiplier": 2
  },
  "enemyTypes": {

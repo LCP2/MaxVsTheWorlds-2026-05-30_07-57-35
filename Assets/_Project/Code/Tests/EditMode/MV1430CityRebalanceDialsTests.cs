@@ -16,7 +16,7 @@ namespace MaxWorlds.Tests.EditMode
     /// MV-1430 — the World 3 (City) rebalance, ONE test (MV-465 Rule 1), Tier 2 resolved values only:
     /// the LOADED City has no challenge pad, no vault, no carriesKey and no projector/jammer/welder in any
     /// garrison or composition; a City bruiser resolves to 200 max HP while World 2's is still 100; a real
-    /// City Launcher's missile resolves to 1.5x the damage of a World 2 Launcher's; a City relay with 12
+    /// City Launcher's missile resolves to 1.5x the damage of a World 2 Launcher's; a City relay with 24
     /// robots alive in its area emits nothing for 10 s and emits again once one dies; and a City canister
     /// blast does 240 to a Heavy and kills a Bruiser 2 m away while Max, 2 m away, still takes 120.
     ///
@@ -192,7 +192,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(w2Damage, 0f, "setup failure: World 2's missile must deal damage");
             Assert.AreEqual(w2Damage * 1.5f, cityDamage, 0.001f, "City Launcher missile damage must be 1.5x World 2's");
 
-            // ---- 4. Relay alive cap: 12 alive in the area -> nothing for 10 s; one dies -> it emits again ----
+            // ---- 4. Relay alive cap: 24 alive in the area -> nothing for 10 s; one dies -> it emits again ----
             var relayGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _spawned.Add(relayGo);
             relayGo.transform.position = RelayOrigin;
@@ -205,7 +205,7 @@ namespace MaxWorlds.Tests.EditMode
             relaySpawner.ConfigureWorldConfig(city);
 
             var robots = new List<RobotEnemy>();
-            for (int i = 0; i < 12; i++)
+            for (int i = 0; i < 24; i++)
             {
                 RobotEnemy rb = NewRobot(EnemyArchetype.Rusher, RelayOrigin + new Vector3(5f + i * 0.01f, 0f, 0f));
                 rb.SetAreaIndex(3);
@@ -214,15 +214,16 @@ namespace MaxWorlds.Tests.EditMode
             relay.TickLure();
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, robots[0].Current, "setup failure: the nearest robot must be lured to the relay");
             robots[0].transform.position = robots[0].ReplicatorSeekTarget;
-            Assert.AreEqual(12, relay.AliveInArea(), "setup failure: 12 robots alive in the relay's area");
+            Assert.AreEqual(24, relay.AliveInArea(), "setup failure: 24 robots alive in the relay's area");
 
             for (int i = 0; i < 500; i++) relay.TickConsumption(Dt);   // 10 s
-            Assert.AreEqual(0, relaySpawner.Emitted, "12 alive = the City aliveCap: the relay must emit nothing in 10 s");
-            Assert.AreEqual(12, relay.AliveInArea(), "and it must not have consumed anything either");
+            Assert.AreEqual(0, relaySpawner.Emitted, "24 alive = the City aliveCap: the relay must emit nothing in 10 s");
+            Assert.AreEqual(24, relay.AliveInArea(), "and it must not have consumed anything either");
 
-            robots[5].Despawn();   // one dies: 11 alive
+            robots[5].Despawn();   // one dies: 23 alive
+            relay.OnAreaEntered(3);   // MV-1488: a held relay keeps no queue, so Max (in the area) is what lures it again
             for (int i = 0; i < 500 && relaySpawner.Emitted == 0; i++) relay.TickConsumption(Dt);
-            Assert.Greater(relaySpawner.Emitted, 0, "with 11 alive the relay must emit again");
+            Assert.Greater(relaySpawner.Emitted, 0, "with 23 alive the relay must emit again");
 
             // ---- 5. Canister blast: 240 to a Heavy, kills a Bruiser at 2 m; Max, 2 m away, still takes 120 ----
             Blast(city, out float heavyTaken, out bool bruiserDead, out float maxTaken);

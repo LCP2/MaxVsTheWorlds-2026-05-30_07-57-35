@@ -589,6 +589,11 @@ namespace MaxWorlds.Enemies
         /// by <see cref="MaxWorlds.Factories.Replicator.TickLure"/>'s own test.</summary>
         public Vector3 ReplicatorSeekTarget { get; private set; }
 
+        /// <summary>MV-1488: true for the robot at queue slot 0 - its final approach ignores the crowd
+        /// separation push (as a lunging robot does) so separation can never hold it outside the
+        /// Replicator's arrive tolerance.</summary>
+        public bool ReplicatorSeekIgnoresSeparation { get; private set; }
+
         /// <summary>MV-820: which 1-based area this robot was placed into — stamped once by whoever
         /// spawned it (<see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/>'s Spawn/SeedGarrison/
         /// PlacePendingGarrison, the same "known before anything reads it" ordering <see cref="SetLevel"/>
@@ -679,9 +684,10 @@ namespace MaxWorlds.Enemies
         /// <see cref="TickRecover"/> is what actually starts the seek once that attack's own EnterRecover
         /// runs on its own schedule. Safe to call again on an already-seeking robot (a box's own refill
         /// re-targets a promoted queue slot this way) — it just refreshes the target point.</summary>
-        public void SeekReplicator(Vector3 hatchPosition)
+        public void SeekReplicator(Vector3 hatchPosition, bool ignoreSeparation = false)
         {
             if (!IsAlive) return;
+            ReplicatorSeekIgnoresSeparation = ignoreSeparation;   // MV-1488: the queue head
             if (Current == State.Telegraph || Current == State.Lunge)
             {
                 _hasPendingReplicatorSeek = true;
@@ -709,6 +715,7 @@ namespace MaxWorlds.Enemies
         public void CancelReplicatorSeeking()
         {
             _hasPendingReplicatorSeek = false;
+            ReplicatorSeekIgnoresSeparation = false;
             if (Current != State.ReplicatorSeeking) return;
             Current = State.Chase;
             _stateTimer = 0f;
@@ -825,7 +832,9 @@ namespace MaxWorlds.Enemies
             to.y = 0f;
             float dist = to.magnitude;
             if (dist <= 0.001f) return;
-            Vector3 dir = EnemySeparation.Steer(to / dist, SeparationPush());   // MV-1442
+            Vector3 dir = ReplicatorSeekIgnoresSeparation
+                ? to / dist   // MV-1488: the queue head walks straight at slot 0
+                : EnemySeparation.Steer(to / dist, SeparationPush());   // MV-1442
 
             // MV-820 R4: seeking speed is the speed this kind attacks at, not its ordinary chase speed
             // — the Charger's own committed charge lungeSpeed in a straight line, every other kind its
