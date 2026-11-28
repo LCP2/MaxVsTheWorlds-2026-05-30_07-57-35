@@ -72,6 +72,11 @@ namespace MaxWorlds.Audio
 
             // MV-1478: a Parts Cache's shield shatters - appended, never inserted.
             CacheUnsealed,
+
+            // MV-1482: area/sub-zone gate sounds - appended, never inserted.
+            GateHit,
+            GateStrained,
+            GateOpened,
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -126,6 +131,9 @@ namespace MaxWorlds.Audio
             { Cue.ArcStrikeCrack, "Arc strike crack" },
             { Cue.RigHum, "RIG hum" },
             { Cue.CacheUnsealed, "Parts Cache unsealed" },
+            { Cue.GateHit, "Gate hit" },
+            { Cue.GateStrained, "Gate strained" },
+            { Cue.GateOpened, "Gate opened" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -174,6 +182,9 @@ namespace MaxWorlds.Audio
             { Cue.CanisterExplosion, 6 },
             { Cue.ArcStrikeCrack, 6 },
             { Cue.CacheUnsealed, 4 },
+            { Cue.GateHit, 10 },    // MV-1482: AreaGate itself throttles to one per 0.12 s
+            { Cue.GateStrained, 4 },
+            { Cue.GateOpened, 4 },
         };
 
         private static SfxPreset P(SfxWaveform wf, float freq = 0f, float slide = 0f,
@@ -476,6 +487,22 @@ namespace MaxWorlds.Audio
             {
                 P(SfxWaveform.Noise, attack: 0.001f, sustain: 0.01f, decay: 0.12f, lowPass: 8000f, volume: 0.7f, seed: 41),
                 P(SfxWaveform.Sine, freq: 880f, slide: 440f, attack: 0.01f, sustain: 0.1f, decay: 0.5f, volume: 0.6f),
+            },
+
+            // MV-1482: fallback only (generated clips replace them).
+            [Cue.GateHit] = new[]
+            {
+                P(SfxWaveform.Sine, freq: 95f, slide: -30f, attack: 0.001f, sustain: 0.01f, decay: 0.12f, volume: 0.8f),
+                P(SfxWaveform.Square, freq: 1500f, slide: -300f, attack: 0.001f, sustain: 0.005f, decay: 0.1f, duty: 0.25f, lowPass: 4000f, volume: 0.3f),
+            },
+            [Cue.GateStrained] = new[]
+            {
+                P(SfxWaveform.Saw, freq: 80f, slide: -25f, vibDepth: 8f, vibRate: 9f, attack: 0.05f, sustain: 0.3f, decay: 0.3f, lowPass: 900f, volume: 0.6f),
+            },
+            [Cue.GateOpened] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.002f, sustain: 0.03f, decay: 0.15f, lowPass: 3000f, volume: 0.9f, seed: 42),
+                P(SfxWaveform.Noise, attack: 0.05f, sustain: 0.3f, decay: 1.0f, lowPass: 350f, volume: 0.8f, seed: 43),
             },
 
             // MV-1426: a short, bright crack - a high noise snap over a fast falling square zap.

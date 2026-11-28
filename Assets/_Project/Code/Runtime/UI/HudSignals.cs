@@ -236,6 +236,15 @@ namespace MaxWorlds.UI
         public static event Action<Vector3> PartsCacheUnsealed;
         public static void EmitPartsCacheUnsealed(Vector3 worldPos) => PartsCacheUnsealed?.Invoke(worldPos);
 
+        /// <summary>MV-1482: an AreaGate took a primary hit (throttled by the gate), crossed 66%/33% HP, or opened
+        /// (a SubZoneGate opening also raises GateOpened).</summary>
+        public static event Action<Vector3> GateHit;
+        public static void EmitGateHit(Vector3 worldPos) => GateHit?.Invoke(worldPos);
+        public static event Action<Vector3> GateStrained;
+        public static void EmitGateStrained(Vector3 worldPos) => GateStrained?.Invoke(worldPos);
+        public static event Action<Vector3> GateOpened;
+        public static void EmitGateOpened(Vector3 worldPos) => GateOpened?.Invoke(worldPos);
+
         /// <summary>MV-1426: an ARC STRIKER's lightning column landed at this ground point (the crack cue).</summary>
         public static event Action<Vector3> ArcStrikeLanded;
 
