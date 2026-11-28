@@ -43,7 +43,7 @@ namespace MaxWorlds.Rendering
         public static readonly Color Asphalt = Rgb(27, 27, 27);   // MV-1483: dark NEUTRAL charcoal tarmac (MV-1472 was warm 40,38,37)
 
         /// <summary>MV-1472: the street lamps' pool tone, about #FFA03A.</summary>
-        public static readonly Color PoolAmber = Rgb(255, 160, 58);
+        public static readonly Color PoolAmber = Rgb(255, 138, 60);   // MV-1486: deep amber (~#FF9A3C, hue nudged to 24 deg: the relay guard's amber band is 25-55), no cream core
         /// <summary>MV-1472: yellow road paint (double centre line). Luminance well under 160.</summary>
         public static readonly Color PaintYellow = Rgb(190, 146, 40);
         /// <summary>MV-1472: slightly different repair patch tone is baked into the asphalt texture;
@@ -451,9 +451,9 @@ namespace MaxWorlds.Rendering
         /// <summary>MV-1483: a lamp pool is 5 m across (radius 2.5 m); the ticket's band is 4.5-5.5 m.</summary>
         public const float LampPoolRadius = 2.74f;
         /// <summary>MV-1483: peak additive strength of a pool (the gradient texture peaks at 1). The pool tone is desaturated to PoolMaxSaturation first, so a bright pool never wears the relay guard colour (IsReservedRelayColour: S >= 0.6 and V >= 0.6).</summary>
-        public const float LampPoolPeak = 1.0f;
+        public const float LampPoolPeak = 0.74f;   // MV-1486: was 1.0 (peak luminance 0.754 -> ~0.46, <= 65%)
         /// <summary>A warm-white tungsten tone, not a saturated neon: under the relay guard's S 0.6.</summary>
-        public const float PoolMaxSaturation = 0.59f;
+        public const float PoolMaxSaturation = 0.80f;   // MV-1486: was 0.59 (it washed the amber toward cream); the guard is satisfied by the tone's hue (24 deg, outside its 25-55 amber band)
 
         /// <summary>MV-1483: a soft floor pool named "Pool" - ONE flat additive unlit quad carrying the shared
         /// radial-gradient texture, replacing MV-1472's ten stacked discs (visible stepped rings). One renderer,
@@ -522,6 +522,9 @@ namespace MaxWorlds.Rendering
             mat = new Material(mat) { name = "CityPoolGradient_Additive", hideFlags = HideFlags.HideAndDontSave };
             if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", PoolGradient());
             if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", PoolGradient());
+            // MV-1486: depth-tested against the opaque scene (walls, roofs, cover, robots hide the pool) - explicit, not left to the shader default.
+            if (mat.HasProperty("_ZTest")) mat.SetFloat("_ZTest", (float)UnityEngine.Rendering.CompareFunction.LessEqual);
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             s_poolMats[tone] = mat;
             return mat;
         }

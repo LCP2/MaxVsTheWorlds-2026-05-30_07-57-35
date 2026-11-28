@@ -714,6 +714,7 @@ namespace MaxWorlds.Dev
                 new[] { "MV-1473-1-street-15pct", "MV-1473-2-quay-50pct", "MV-1473-3-gantry-85pct" }));
             Add(BuildMv1472CityStreetLook());
             Add(BuildMv1483CityMood());
+            Add(BuildMv1486CityPools());
             Add(BuildMv1436A5TopDown());
             return d;
         }
@@ -3186,6 +3187,123 @@ namespace MaxWorlds.Dev
                 ArmFile = "Temp/mv1483.arm",
                 HeadlessMarker = "Temp/mv1483.headless",
                 DoneFileName = "_mv1483_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 200,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = shots,
+            };
+        }
+
+        /// <summary>MV-1486 AC2: City a2 and a15 from the production camera and look (HUD hidden). Per frame: amber pixels
+        /// (R &gt; B + 40 and R &gt; 90) median and 95th-percentile luminance; unlit tarmac (darkest 40%) median luminance and |R-B|;
+        /// and the count of amber pixels whose camera ray first hits an upward-facing surface above 0.3 m (a wall or roof top
+        /// face), found by Physics.Raycast on every 3rd pixel in each axis. Written to <c>Logs/MV-1486-metrics.txt</c>.
+        /// Run via <c>cc-mv1486-capture.bat</c>.</summary>
+        private static CapturePreset BuildMv1486CityPools()
+        {
+            string outDir = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs"));
+            string[] areas = { "a2", "a15" };
+            var report = new System.Text.StringBuilder();
+            Camera shotCam = null;
+
+            IEnumerator FrameArea(string area)
+            {
+                if (!DevModeController.TryJumpToArea(area))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(" + area + ") found no map/player to jump");
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                shotCam = cam;
+                for (int i = 0; i < 6; i++) yield return null;
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                yield return FrameArea(areas[0]);
+            }
+
+            Action<Texture2D> Measure(string name) => tex =>
+            {
+                Color32[] px = tex.GetPixels32();
+                int n = px.Length;
+                var lum = new byte[n];
+                for (int i = 0; i < n; i++)
+                {
+                    Color32 c = px[i];
+                    lum[i] = (byte)Mathf.Clamp(Mathf.RoundToInt(0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b), 0, 255);
+                }
+                var order = new int[n];
+                for (int i = 0; i < n; i++) order[i] = i;
+                Array.Sort(order, (a, b) => lum[a].CompareTo(lum[b]));
+                int dark = (int)(n * 0.4f);
+                var dr = new byte[dark]; var db = new byte[dark];
+                for (int i = 0; i < dark; i++) { dr[i] = px[order[i]].r; db[i] = px[order[i]].b; }
+                Array.Sort(dr); Array.Sort(db);
+                var amberLum = new List<byte>();
+                for (int i = 0; i < n; i++)
+                {
+                    Color32 c = px[i];
+                    if (c.r > c.b + 40 && c.r > 90) amberLum.Add(lum[i]);
+                }
+                amberLum.Sort();
+                int topFace = 0, sampled = 0;
+                var hitNames = new Dictionary<string, int>();
+                var poolRects = new List<Bounds>();
+                foreach (var pr in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+                    if (pr != null && pr.name == "Pool" && pr.transform.parent != null && pr.transform.parent.name == "Street Lamp") poolRects.Add(pr.bounds);
+                if (shotCam != null)
+                {
+                    for (int y = 0; y < tex.height; y += 3)
+                    for (int x = 0; x < tex.width; x += 3)
+                    {
+                        Color32 c = px[y * tex.width + x];
+                        if (!(c.r > c.b + 40 && c.r > 90)) continue;
+                        sampled++;
+                        Ray ray = shotCam.ScreenPointToRay(new Vector3((x + 0.5f) * shotCam.pixelWidth / tex.width, (y + 0.5f) * shotCam.pixelHeight / tex.height, 0f));
+                        if (Physics.Raycast(ray, out RaycastHit hit, 500f, ~0, QueryTriggerInteraction.Ignore) && hit.normal.y > 0.7f && hit.point.y > 0.3f)
+                        {
+                            bool inPool = false;
+                            foreach (Bounds pb in poolRects)
+                                if (Mathf.Abs(hit.point.x - pb.center.x) < pb.extents.x && Mathf.Abs(hit.point.z - pb.center.z) < pb.extents.z) { inPool = true; break; }
+                            if (inPool) { topFace++; string hn = hit.collider.name; hitNames[hn] = hitNames.TryGetValue(hn, out int hc) ? hc + 1 : 1; }
+                        }
+                    }
+                }
+                int dm = dark / 2;
+                int p95 = amberLum.Count > 0 ? amberLum[Mathf.Min(amberLum.Count - 1, (int)(amberLum.Count * 0.95f))] : 0;
+                report.AppendLine(name + ": amber=" + (100f * amberLum.Count / n).ToString("F1") + "% median lum=" + (amberLum.Count > 0 ? amberLum[amberLum.Count / 2] : 0) + " p95 lum=" + p95 +
+                                  "; unlit tarmac (darkest 40%): median R=" + dr[dm] + " median B=" + db[dm] + " |R-B|=" + Mathf.Abs(dr[dm] - db[dm]) + " median lum=" + lum[order[dm]] +
+                                  "; amber pixels sampled=" + sampled + " whose ray first hits a top face above 0.3 m inside a lamp pool's footprint=" + topFace + " [" + string.Join(", ", System.Linq.Enumerable.Select(hitNames, kv => kv.Key + " x" + kv.Value)) + "]");
+                System.IO.File.WriteAllText(System.IO.Path.Combine(outDir, "MV-1486-metrics.txt"), report.ToString());
+            };
+
+            var shots = new List<CaptureShot>();
+            for (int i = 0; i < areas.Length; i++)
+            {
+                string area = areas[i];
+                Func<Camera, IEnumerator> setup = i == 0 ? NoSetup : (cam => FrameArea(area));
+                shots.Add(new CaptureShot("MV-1486-" + area, setup, null, Measure(area)));
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1486citypools",
+                LogTag = "[MV1486Capture]",
+                Flag = "-mv1486shot",
+                ArmFile = "Temp/mv1486.arm",
+                HeadlessMarker = "Temp/mv1486.headless",
+                DoneFileName = "_mv1486_done.txt",
                 Width = 1600,
                 Height = 1000,
                 DisableBrain = false,
