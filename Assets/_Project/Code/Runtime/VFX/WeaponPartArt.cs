@@ -573,22 +573,7 @@ namespace MaxWorlds.VFX
             label.transform.SetParent(root.transform, false);
             label.transform.localPosition = new Vector3(0.14f, h * 0.5f + 0.006f, 0f);
             label.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            var tm = label.AddComponent<TextMesh>();
-            tm.font = MaxWorlds.UI.HudFont.Get();
-            tm.fontSize = 64;
-            tm.characterSize = 0.04f;
-            tm.fontStyle = FontStyle.Bold;
-            tm.anchor = TextAnchor.MiddleCenter;
-            tm.alignment = TextAlignment.Center;
-            tm.color = PowerCellSecondaryGlow;
-            tm.text = "x10";
-            var lmr = label.GetComponent<MeshRenderer>();
-            if (lmr != null)
-            {
-                lmr.sharedMaterial = tm.font.material;
-                lmr.shadowCastingMode = ShadowCastingMode.Off;
-                lmr.receiveShadows = false;
-            }
+            MaxWorlds.UI.CrispUi.WorldText(label, "x10", 64, 0.04f, PowerCellSecondaryGlow);
 
             Glow(root, RocketCrateGlowName, new Vector3(0f, -0.46f, 0f), 1.5f, PowerCellSecondaryGlow);   // a halo under the crate, not a lamp over it
             root.transform.Find(RocketCrateGlowName).localScale = new Vector3(1.5f, 0.02f, 1.5f);
@@ -614,7 +599,7 @@ namespace MaxWorlds.VFX
             }
 
             Transform label = art.Find(CrateLabelName);
-            if (label != null && label.TryGetComponent(out TextMesh tm)) tm.color = lit ? PowerCellSecondaryGlow : CrateTextDim;
+            if (label != null && label.TryGetComponent(out TMPro.TextMeshPro tm)) tm.color = lit ? PowerCellSecondaryGlow : CrateTextDim;
         }
 
         /// <summary>A point on a circle — <paramref name="angleDeg"/> around the vertical axis at height

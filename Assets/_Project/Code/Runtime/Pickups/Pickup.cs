@@ -80,7 +80,7 @@ namespace MaxWorlds.Pickups
 
         private Transform _spin;
         private Transform _crateArt;
-        private TextMesh _rackFullLabel;
+        private TMPro.TextMeshPro _rackFullLabel;
         private float _bobAmplitude = 0.12f;
         private float _spinSpeed = 140f;
         private float _baseY = FloatHeight;
@@ -240,22 +240,7 @@ namespace MaxWorlds.Pickups
             label.transform.SetParent(transform, false);
             label.transform.localPosition = new Vector3(0f, CrateLabelHeight, 0f);
             label.transform.localRotation = Quaternion.Euler(72f, 0f, 0f);
-            _rackFullLabel = label.AddComponent<TextMesh>();
-            _rackFullLabel.font = MaxWorlds.UI.HudFont.Get();
-            _rackFullLabel.fontSize = 64;
-            _rackFullLabel.characterSize = 0.07f;
-            _rackFullLabel.fontStyle = FontStyle.Bold;
-            _rackFullLabel.anchor = TextAnchor.MiddleCenter;
-            _rackFullLabel.alignment = TextAlignment.Center;
-            _rackFullLabel.color = new Color(0.92f, 0.36f, 0.27f);
-            _rackFullLabel.text = "RACK FULL";
-            var lmr = label.GetComponent<MeshRenderer>();
-            if (lmr != null)
-            {
-                lmr.sharedMaterial = _rackFullLabel.font.material;
-                lmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                lmr.receiveShadows = false;
-            }
+            _rackFullLabel = MaxWorlds.UI.CrispUi.WorldText(label, "RACK FULL", 64, 0.07f, new Color(0.92f, 0.36f, 0.27f));
 
             _glowRing = GroundRing.Create("CrateRing");
             _glowRing.transform.SetParent(transform, false);

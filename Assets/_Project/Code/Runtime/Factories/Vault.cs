@@ -58,7 +58,7 @@ namespace MaxWorlds.Factories
         private float _doorSlideT; // 0 (closed) .. 1 (open)
         private CameraFacingFlare _icon;
         private Transform _padlock;   // MV-1403: padlock built from primitives, floats above the door while locked
-        private TextMesh _label;      // MV-1403: floating gold "VAULT" (then "OPEN" for 2 s) over the vault's centre
+        private TMPro.TextMeshPro _label;      // MV-1403: floating gold "VAULT" (then "OPEN" for 2 s) over the vault's centre
         private float _openIconTimer = -1f; // -1 = not counting down
         private Transform _player;
 
@@ -272,8 +272,7 @@ namespace MaxWorlds.Factories
             if (_label != null) _label.gameObject.SetActive(false);
         }
 
-        /// <summary>The floating word, centred over the vault (MV-1403). A legacy <see cref="TextMesh"/> on
-        /// the built-in font, same "no font asset, renders headless" reasoning <see cref="HudFont"/> gives.</summary>
+        /// <summary>The floating word, centred over the vault (MV-1403). A world-space TextMeshPro on the CrispUi SDF font (MV-1485).</summary>
         private void BuildLabel()
         {
             var go = new GameObject($"{name} Label");
@@ -281,23 +280,7 @@ namespace MaxWorlds.Factories
             go.transform.localPosition = new Vector3(0f, LabelHeight, 0f);
             go.transform.localRotation = Quaternion.Euler(PadlockPitchDegrees, 0f, 0f);
 
-            _label = go.AddComponent<TextMesh>();
-            _label.font = HudFont.Get();
-            _label.fontSize = LabelFontSize;
-            _label.characterSize = LabelCharacterSize;
-            _label.fontStyle = FontStyle.Bold;
-            _label.anchor = TextAnchor.MiddleCenter;
-            _label.alignment = TextAlignment.Center;
-            _label.color = ClosedIconColor;
-            _label.text = "VAULT";
-
-            var mr = go.GetComponent<MeshRenderer>();
-            if (mr != null)
-            {
-                mr.sharedMaterial = _label.font.material;
-                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                mr.receiveShadows = false;
-            }
+            _label = CrispUi.WorldText(go, "VAULT", LabelFontSize, LabelCharacterSize, ClosedIconColor);
 
             // A vault already open at build (checkpoint resume) never shows it; ApplyCheckpointOpened hides it.
             go.SetActive(State == VaultState.Closed);

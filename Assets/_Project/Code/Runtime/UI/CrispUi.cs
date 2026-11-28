@@ -63,6 +63,36 @@ namespace MaxWorlds.UI
             return _tmpFont;
         }
 
+        /// <summary>MV-1485: a world-space <see cref="TextMeshPro"/> label on <see cref="TmpFont"/> (replaces legacy TextMesh,
+        /// whose dynamic-font atlas rebuild left stale UVs = white boxes). <paramref name="legacyFontSize"/> x
+        /// <paramref name="legacyCharacterSize"/> reproduces the old TextMesh on-screen size (both are em = size x 0.1 m).</summary>
+        public static TextMeshPro WorldText(GameObject go, string text, int legacyFontSize, float legacyCharacterSize, Color color)
+        {
+            // The biome sweep (WorldMaterials.Apply / RuntimeSurfaceDirector) repaints every MeshRenderer without this
+            // marker with a flat surface material, turning each glyph quad into a solid box (the real MV-1485 cause).
+            if (go.GetComponent<MaxWorlds.Core.KeepsOwnMaterial>() == null) go.AddComponent<MaxWorlds.Core.KeepsOwnMaterial>();
+            // Labels hang under damageable bodies (PartsCache, Vault): CharacterSkinDirector re-skins every renderer
+            // under an IDamageable unless it carries SelfDrivenTint, which painted the glyph quads solid teal.
+            if (go.GetComponent<MaxWorlds.Core.SelfDrivenTint>() == null) go.AddComponent<MaxWorlds.Core.SelfDrivenTint>();
+            var t = go.AddComponent<TextMeshPro>();
+            t.font = TmpFont();
+            t.fontSize = legacyFontSize * legacyCharacterSize;
+            t.fontStyle = FontStyles.Bold;
+            t.alignment = TextAlignmentOptions.Center;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.overflowMode = TextOverflowModes.Overflow;
+            t.color = color;
+            t.text = text;
+            t.rectTransform.sizeDelta = new Vector2(20f, 2f);
+            var mr = go.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+            }
+            return t;
+        }
+
         /// <summary>One call: a <see cref="TextMeshProUGUI"/> child of <paramref name="parent"/> using <see cref="TmpFont"/>.</summary>
         public static TextMeshProUGUI Text(Transform parent, string name, string text, float fontSize,
             Color color, TextAlignmentOptions alignment = TextAlignmentOptions.Center)
