@@ -342,8 +342,13 @@ namespace MaxWorlds.Pickups
         /// own doc comment already promised; for a pooled reuse, <see cref="Kind"/> never changes and the
         /// art/greybox were already built the first time — so raising it here instead is unconditionally
         /// safe and fixes both without depending on Unity's OnEnable timing at all.</summary>
+        /// <summary>MV-1481: extra height above the resting bob, set by the director while a Parts Cache burst pickup is in
+        /// flight or bouncing. Reset to 0 on every <see cref="Place"/>.</summary>
+        public float FlightLift { get; set; }
+
         public void Place(Vector3 groundPos)
         {
+            FlightLift = 0f;
             SetBlinkHidden(false);   // MV-1101: a pooled pickup must never pop back out mid-blink-hidden
 
             // MV-1001: the old code hard-coded _baseY = FloatHeight, so every drop hovered above the
@@ -369,7 +374,7 @@ namespace MaxWorlds.Pickups
             // above rather than as a bit of dropped debris.
             if (_spin != null && _spinSpeed > 0f) _spin.Rotate(0f, _spinSpeed * Time.deltaTime, 0f, Space.Self);
             Vector3 pos = transform.position;
-            pos.y = _baseY + Mathf.Sin(Time.unscaledTime * 3f) * _bobAmplitude;
+            pos.y = _baseY + FlightLift + Mathf.Sin(Time.unscaledTime * 3f) * _bobAmplitude;
             transform.position = pos;
             // MV-1448: the crate's floor ring is a child of this bobbing transform but must stay pinned to
             // the ground (a ring that bobs dips under the floor and vanishes) - re-pin it every frame, the
