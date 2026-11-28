@@ -188,7 +188,7 @@ namespace MaxWorlds.Weapons
             for (int i = 0; i < count; i++)
             {
                 Collider c = s_hitColliders[i];
-                if (CoverLayer.Exists && c.gameObject.layer == CoverLayer.Index) continue;
+                if (CoverLayer.Exists && c.gameObject.layer == CoverLayer.Index && !c.TryGetComponent<MaxWorlds.Factories.PartsCache>(out _)) continue;   // MV-1484: a Parts Cache is solid to an orb
                 if (!c.TryGetComponent(out IDamageable target)) continue;
                 if (!target.IsAlive || target.Team != Team.Enemy) continue;
                 if (target is IDormant dormant && dormant.IsDormant) continue;

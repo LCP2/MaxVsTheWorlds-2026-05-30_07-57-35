@@ -565,7 +565,7 @@ namespace MaxWorlds.Weapons
             for (int i = 0; i < count; i++)
             {
                 Collider c = s_hitColliders[i];
-                if (CoverLayer.Exists && c.gameObject.layer == CoverLayer.Index) continue;
+                if (CoverLayer.Exists && c.gameObject.layer == CoverLayer.Index && !c.TryGetComponent<MaxWorlds.Factories.PartsCache>(out _)) continue;   // MV-1484: a Parts Cache is solid to the ball
                 if (!RicochetDisc.TryResolveDamageable(c, out IDamageable d)) continue;
                 if (!d.IsAlive || d.Team != Team.Enemy) continue;
                 if (skipDomeProtected && d is RobotEnemy prot && prot.IsDomeProtected) continue;

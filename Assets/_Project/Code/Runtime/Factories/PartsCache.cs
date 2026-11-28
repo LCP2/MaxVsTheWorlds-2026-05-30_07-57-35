@@ -78,7 +78,9 @@ namespace MaxWorlds.Factories
         public string LabelText => _label != null ? _label.text : string.Empty;
         public int BurstPickupCount { get; private set; }
 
-        public bool IsAlive => State == CacheState.Unsealed;
+        // MV-1484: a SEALED cache is a live, solid shot-stopper too (it absorbs with a spark; TakeDamage does the sealed/
+        // unsealed split) - when this was Unsealed-only every weapon's `!IsAlive -> skip` filter let shots fly straight through.
+        public bool IsAlive => State != CacheState.Opened;
         public Team Team => Team.Enemy; // player weapons hurt it; robots and their fire cannot
 
         private float _hp;
@@ -171,6 +173,10 @@ namespace MaxWorlds.Factories
             if (_hp <= 0f) { _maxHp = Mathf.Max(1f, _maxHp); _hp = _maxHp; }
 
             _collider = GetComponent<Collider>();
+            // MV-1484: solid to shots like cover (MV-1478 change 3). The Cover layer is what every weapon's sight/occlusion test
+            // and the robots' own fire stop on, so nothing passes through to what stands behind it. Side effect, stated: a robot's
+            // line of sight is now blocked by the cache like any other cover piece.
+            CoverLayer.Assign(gameObject);
             var rootRend = GetComponent<Renderer>();
             if (rootRend != null)
             {
