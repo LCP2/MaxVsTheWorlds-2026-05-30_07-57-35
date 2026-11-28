@@ -505,12 +505,37 @@ namespace MaxWorlds.Pickups
         public Pickup PlaceVaultKeyAt(Vector3 pos, string vaultId) => SpawnDrop(PickupKind.VaultKey, pos, vaultId: vaultId);
 
         /// <summary>MV-1478: the pickups of a Parts Cache burst that fly to Max from anywhere (the existing Magneto pull, with no
-        /// radius) until collected.</summary>
+        /// radius) until collected. MV-1481: a pickup joins this set only once its flight and settle are over.</summary>
         private readonly HashSet<Pickup> _burstPulled = new HashSet<Pickup>();
+
+        /// <summary>MV-1481: one cache-burst pickup's scatter flight, bounce and settle.</summary>
+        private sealed class BurstFlight
+        {
+            public Vector3 From, To;
+            public float Duration, Peak, T;
+        }
+
+        /// <summary>MV-1481: seconds a landed burst pickup sits before Magneto or a walk-over may take it.</summary>
+        public const float BurstSettleSeconds = 1.0f;
+        public const float BurstMinRadius = 1.5f, BurstMaxRadius = 3.5f, BurstMinSeparation = 0.3f;
+        private const float BurstBounceSeconds = 0.25f, BurstBounceHeight = 0.18f;
+
+        private readonly Dictionary<Pickup, BurstFlight> _burstFlights = new Dictionary<Pickup, BurstFlight>();
+
+        /// <summary>MV-1481: whether a burst pickup is still airborne, bouncing or settling (so nothing may collect it).</summary>
+        public bool IsBurstHeld(Pickup p) => p != null && _burstFlights.ContainsKey(p);
+
+        private static bool BurstSpotFree(MapData map, Vector3 origin, Vector3 spot)
+        {
+            if (map != null && !map.IsWalkable(origin, spot)) return false;
+            return !Physics.CheckSphere(spot + Vector3.up * 0.4f, 0.3f, CoverLayer.Mask, QueryTriggerInteraction.Ignore);
+        }
 
         /// <summary>MV-1478: spills <paramref name="parts"/> Parts around <paramref name="pos"/> as one Supercell per
         /// <see cref="PickupWallet.SupercellCellValue"/> Parts plus a Power Cell for each one left over, so the pickups'
-        /// banked value is exactly <paramref name="parts"/>. Every pickup flies to Max and never expires. Returns what it created.</summary>
+        /// banked value is exactly <paramref name="parts"/>. MV-1481: each pickup arcs out to a random walkable spot 1.5-3.5 m away
+        /// (0.5-0.7 s, peak 1.2-2.0 m, small bounce), sits <see cref="BurstSettleSeconds"/> on the floor, and only then flies to Max
+        /// and never expires. Returns what it created.</summary>
         public List<Pickup> SpawnCacheBurst(Vector3 pos, int parts)
         {
             var created = new List<Pickup>();
@@ -518,18 +543,70 @@ namespace MaxWorlds.Pickups
             int supercells = parts / PickupWallet.SupercellCellValue;
             int cells = parts - supercells * PickupWallet.SupercellCellValue;
             int total = supercells + cells;
+            MapData map = EnemyNavigation.Map;
+            var spots = new List<Vector3>();
             for (int i = 0; i < total; i++)
             {
-                float ang = i * (Mathf.PI * 2f / total) + 0.3f;
-                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (ScatterRadius * (0.6f + 0.4f * (i % 2)));
+                Vector3 spot = pos;
+                for (int tries = 0; tries < 40; tries++)
+                {
+                    float ang = Random.value * Mathf.PI * 2f;
+                    float r = Random.Range(BurstMinRadius, BurstMaxRadius);
+                    Vector3 cand = pos + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * r;
+                    bool apart = true;
+                    for (int k = 0; k < spots.Count; k++)
+                        if ((spots[k] - cand).sqrMagnitude < BurstMinSeparation * BurstMinSeparation) { apart = false; break; }
+                    spot = cand;
+                    if (apart && BurstSpotFree(map, pos, cand)) break;
+                }
+                spots.Add(spot);
                 Pickup drop = i < supercells
-                    ? SpawnDrop(PickupKind.Supercell, pos + off, DecorativeKind())
-                    : SpawnDrop(PickupKind.PowerCell, pos + off);
+                    ? SpawnDrop(PickupKind.Supercell, pos, DecorativeKind())
+                    : SpawnDrop(PickupKind.PowerCell, pos);
                 if (drop == null) continue;
-                _burstPulled.Add(drop);
+                _burstFlights[drop] = new BurstFlight
+                {
+                    From = drop.transform.position,
+                    To = new Vector3(spot.x, drop.transform.position.y, spot.z),
+                    Duration = Random.Range(0.5f, 0.7f),
+                    Peak = Random.Range(1.2f, 2.0f),
+                };
                 created.Add(drop);
             }
             return created;
+        }
+
+        /// <summary>MV-1481: advances every burst pickup's flight / bounce / settle clock; a pickup whose settle second is over
+        /// leaves <see cref="_burstFlights"/> and joins <see cref="_burstPulled"/>.</summary>
+        private void TickBurstFlights(float dt)
+        {
+            if (_burstFlights.Count == 0) return;
+            List<Pickup> done = null;
+            foreach (var kv in _burstFlights)
+            {
+                Pickup p = kv.Key;
+                BurstFlight f = kv.Value;
+                if (p == null) { (done ??= new List<Pickup>()).Add(p); continue; }
+                f.T += dt;
+                if (f.T < f.Duration)
+                {
+                    float u = f.T / f.Duration;
+                    Vector3 xz = Vector3.Lerp(f.From, f.To, u);
+                    p.transform.position = new Vector3(xz.x, p.transform.position.y, xz.z);
+                    p.FlightLift = f.Peak * 4f * u * (1f - u);
+                    continue;
+                }
+                p.transform.position = new Vector3(f.To.x, p.transform.position.y, f.To.z);
+                float bt = f.T - f.Duration;
+                p.FlightLift = bt < BurstBounceSeconds ? BurstBounceHeight * Mathf.Sin(Mathf.PI * bt / BurstBounceSeconds) : 0f;
+                if (bt >= BurstSettleSeconds) { p.FlightLift = 0f; (done ??= new List<Pickup>()).Add(p); }
+            }
+            if (done == null) return;
+            foreach (Pickup p in done)
+            {
+                _burstFlights.Remove(p);
+                if (p != null) { _burstPulled.Add(p); MapStaticBatchRoot.Active?.ReregisterPickupIfZoneChanged(p, p.transform.position); }
+            }
         }
 
         /// <summary>MV-1448: places an authored Rocket Crate at <paramref name="pos"/> - unless this run has
@@ -824,6 +901,7 @@ namespace MaxWorlds.Pickups
             }
 
             _pullingThisTick.Clear();
+            TickBurstFlights(dt);   // MV-1481
 
             // MV-1448: a Rocket Crate is lit exactly while all 10 rockets fit - re-read every tick so it
             // re-lights the moment the count drops (and dims the moment it would overflow).
@@ -854,6 +932,7 @@ namespace MaxWorlds.Pickups
                     // MV-1147: a tracked drop destroyed out from under the director — drop it rather
                     // than dereference it below (transform, Collect, the Magneto pull).
                     if (p == null) { UntrackCell(p); _reserveFullTold.Remove(p); _live.RemoveAt(i); continue; }
+                    if (_burstFlights.ContainsKey(p)) continue;   // MV-1481: airborne / settling - no walk-over, no Magneto
                     Vector3 pPos = p.transform.position;
                     float dx = pPos.x - m.x;
                     float dz = pPos.z - m.z;
@@ -1069,6 +1148,7 @@ namespace MaxWorlds.Pickups
 
             _reserveFullTold.Remove(p);
             _burstPulled.Remove(p);   // MV-1478
+            _burstFlights.Remove(p);  // MV-1481
             // MV-1038: same pool-return unregistration as RetireCell — see that call's own comment.
             MapStaticBatchRoot.Active?.Unregister(p.GetComponentsInChildren<Renderer>(true));
             p.gameObject.SetActive(false);
